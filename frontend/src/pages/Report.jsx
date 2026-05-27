@@ -1,4 +1,2 @@
-// TODO: Report page
-export default function Report() {
-  return <div>Report</div>;
-}
+// Report.jsx — re-exports ReportScreen from the screens directory.
+export { ReportScreen as default, ReportScreen } from "../screens/ReportScreen.jsx";

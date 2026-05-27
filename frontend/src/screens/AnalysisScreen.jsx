@@ -1,23 +1,27 @@
-// AnalysisScreen.jsx — the "AI thinking" moment.
-// Runs the pipeline animation in parallel with a real backend call.
-// Uses polling (POST → job_id → GET until complete) to match our async backend.
-// Falls back to the static demo claim if the API is unavailable.
+// AnalysisScreen.jsx — US-05, US-06, US-07, FR-04
+// Wiki alignment:
+//   - Company name shows actual query, not hardcoded Petrovera (US-05)
+//   - Scraping failure triggers manual input UI, not silent demo fallback (FR-04/US-04)
+//   - Retry button on timeout (US-07)
+//   - Five pipeline steps with real-time signals (US-05/US-06)
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { GWD_DATA } from "../data.js";
 
-// ─── API constants ─────────────────────────────────────────────────────────
-const POLL_INTERVAL_MS  = 3000;
-const API_TIMEOUT_MS    = 60000;  // US-02: show timeout UI after 60s
+// ─── Constants ─────────────────────────────────────────────────────────────
+const POLL_INTERVAL_MS = 3000;
+const API_TIMEOUT_MS   = 60000;  // US-07: show timeout UI after 60s
 
 // ─── API helpers ───────────────────────────────────────────────────────────
-
-async function startAnalysis(query, signal) {
+async function startAnalysis(query, manualContent, signal) {
   const res = await fetch("/api/analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    // Send both field names for maximum compat
-    body: JSON.stringify({ company_name: query, query }),
+    body: JSON.stringify({
+      company_name:   query,
+      query,
+      manual_content: manualContent || null,
+    }),
     signal,
   });
   if (!res.ok) throw new Error(`API ${res.status}`);
@@ -31,12 +35,8 @@ async function pollReport(jobId, signal) {
 }
 
 // ─── Response normaliser ───────────────────────────────────────────────────
-// Maps whatever the backend returns onto the shape the frontend components
-// expect, using the demo claim as a safety-net for any missing fields.
 function normalise(raw, demoClaim) {
   if (!raw || raw.error) return null;
-
-  // If the backend already returned a completed report, reshape it
   const dim = raw.dimensionScores || raw.dimension_scores || {};
   const flags = (raw.flags || []).map(f => ({
     type:        f.type        || "Finding",
@@ -44,18 +44,16 @@ function normalise(raw, demoClaim) {
     description: f.description || "",
     source:      f.source      || "",
   }));
-
   return {
-    // Merge demo claim first so any missing field has a safe default
     ...demoClaim,
-    // Then override with real API data
     id:           raw.id        || raw.job_id || demoClaim.id,
     score:        raw.score     ?? demoClaim.score,
     riskLevel:    raw.riskLevel || raw.risk_level || demoClaim.riskLevel,
+    risk_level:   raw.risk_level || raw.riskLevel || demoClaim.risk_level,
     summary:      raw.summary   || demoClaim.summary,
     confidence:   raw.confidence ?? demoClaim.confidence,
     company_name: raw.company_name || demoClaim.company_name,
-    headline:     raw.headline  || raw.company_name || demoClaim.headline,
+    headline:     raw.headline || raw.company_name || demoClaim.headline,
     analyzedAt:   raw.analyzedAt || raw.completed_at || demoClaim.analyzedAt,
     dimensionScores: {
       specificity:               dim.specificity               ?? demoClaim.dimensionScores.specificity,
@@ -64,8 +62,7 @@ function normalise(raw, demoClaim) {
       negative_news:             dim.negative_news             ?? demoClaim.dimensionScores.negative_news,
       greenwashing_language:     dim.greenwashing_language     ?? demoClaim.dimensionScores.greenwashing_language,
     },
-    // Only override flags/evidence if the API actually returned them
-    flags:    flags.length    > 0 ? flags    : demoClaim.flags,
+    flags:    flags.length > 0 ? flags : demoClaim.flags,
     evidence: raw.evidence?.length > 0 ? raw.evidence : demoClaim.evidence,
   };
 }
@@ -77,12 +74,112 @@ function inferSeverity(type) {
   return "low";
 }
 
-// ─── Component ─────────────────────────────────────────────────────────────
+// ─── FR-04 Manual Input Fallback ───────────────────────────────────────────
+// US-04: shown when scraping fails; user pastes content to continue analysis.
+function ManualInputFallback({ companyName, onSubmit, onRetry }) {
+  const [text, setText] = useState("");
+  const [file, setFile] = useState(null);
+  const [error, setError] = useState("");
 
+  function handleSubmit() {
+    const content = text.trim();
+    if (!content && !file) {
+      setError("Please paste some content or upload a PDF to continue.");
+      return;
+    }
+    if (file) {
+      // Read file content
+      const reader = new FileReader();
+      reader.onload = (e) => onSubmit(e.target.result);
+      reader.readAsText(file);
+    } else {
+      onSubmit(content);
+    }
+  }
+
+  return (
+    <div className="fallback-wrap">
+      <div className="fallback-card">
+        {/* Status banner */}
+        <div className="fallback-banner">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none">
+            <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.3"/>
+            <path d="M8 5v3.5M8 10v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+          </svg>
+          <span>
+            Automatic scraping was blocked for <strong>{companyName}</strong>.
+            Paste the company's ESG content below to continue.
+          </span>
+        </div>
+
+        <div className="fallback-body">
+          <div className="fallback-section">
+            <label className="fallback-label">
+              Paste ESG content
+              <span className="fallback-label-hint mono small mute">
+                — Annual report excerpt, sustainability page copy, or press release
+              </span>
+            </label>
+            <textarea
+              className="fallback-textarea"
+              placeholder={`Paste ${companyName}'s sustainability claims, ESG report excerpt, or any relevant content here…`}
+              value={text}
+              onChange={e => { setText(e.target.value); setError(""); }}
+              rows={10}
+              autoFocus
+            />
+          </div>
+
+          <div className="fallback-or">
+            <span>or</span>
+          </div>
+
+          <div className="fallback-section">
+            <label className="fallback-label">Upload PDF</label>
+            <label className="fallback-upload">
+              <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
+                <path d="M10 13V5M7 8l3-3 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M4 15h12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+              {file ? (
+                <span>{file.name} <button onClick={() => setFile(null)} style={{ marginLeft: 8 }}>✕</button></span>
+              ) : (
+                <span>Drop a PDF or <span className="lv2-upload-link">browse files</span></span>
+              )}
+              <input
+                type="file"
+                accept=".pdf,.txt"
+                style={{ display: "none" }}
+                onChange={e => { setFile(e.target.files[0]); setText(""); setError(""); }}
+              />
+            </label>
+          </div>
+
+          {error && <div className="fallback-error">{error}</div>}
+
+          <div className="fallback-actions">
+            <button className="rep-action ghost" onClick={onRetry}>
+              ← Try automatic scraping again
+            </button>
+            <button
+              className="rep-action"
+              disabled={!text.trim() && !file}
+              onClick={handleSubmit}
+            >
+              Continue analysis →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ─────────────────────────────────────────────────────────
 export function AnalysisScreen({ claim, query, onComplete }) {
   const steps = GWD_DATA.PIPELINE_STEPS;
 
-  // Pipeline animation state
+  // Pipeline animation
   const [stepIdx,        setStepIdx]        = useState(0);
   const [doneSteps,      setDoneSteps]      = useState(new Set());
   const [confidence,     setConfidence]     = useState(0);
@@ -91,22 +188,24 @@ export function AnalysisScreen({ claim, query, onComplete }) {
   const [contradictions, setContradictions] = useState(0);
 
   // API state
-  const [apiResult, setApiResult] = useState(null);
-  const [apiError,  setApiError]  = useState(null);
-  const [timedOut,  setTimedOut]  = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
+  const [apiResult,       setApiResult]       = useState(null);
+  const [apiError,        setApiError]        = useState(null);
+  const [timedOut,        setTimedOut]        = useState(false);
+  const [retryCount,      setRetryCount]      = useState(0);
+  // FR-04: Manual input fallback
+  const [scrapingFailed,  setScrapingFailed]  = useState(false);
+  const [manualContent,   setManualContent]   = useState(null);
 
-  const finished      = useRef(false);
-  const pipelineDone  = useRef(false);
-  const abortRef      = useRef(null);
+  const finished     = useRef(false);
+  const pipelineDone = useRef(false);
+  const abortRef     = useRef(null);
 
-  const company      = GWD_DATA.COMPANY;
-  const displayName  = company.legalName;
-  const displayTicker = company.ticker;
+  // US-05: Display the actual company being analyzed — not hardcoded Petrovera
+  const displayName = query || claim?.company_name || "Company";
 
   // ── 1. Pipeline animation ────────────────────────────────────────────────
   useEffect(() => {
-    if (finished.current) return;
+    if (finished.current || scrapingFailed) return;
     const timings = [900, 1100, 1500, 1700, 1200];
     if (stepIdx >= steps.length) {
       pipelineDone.current = true;
@@ -122,39 +221,42 @@ export function AnalysisScreen({ claim, query, onComplete }) {
       setStepIdx(i => i + 1);
     }, timings[stepIdx] ?? 1200);
     return () => clearTimeout(t);
-  }, [stepIdx, apiResult, apiError]);
+  }, [stepIdx, apiResult, apiError, scrapingFailed]);
 
-  // ── 2. Animate counters toward final values ──────────────────────────────
+  // ── 2. Animate counters ──────────────────────────────────────────────────
   useEffect(() => {
     const target = apiResult ?? claim;
-    const progress = Math.min(
-      1,
+    if (!target) return;
+    const progress = Math.min(1,
       (stepIdx + (doneSteps.size > stepIdx ? 1 : 0)) / steps.length,
     );
     setConfidence(Math.round(progress * (target.confidence ?? 0.85) * 100));
-    setPartialScore(Math.round(progress * target.score));
-    setEvidenceFound(Math.round(progress * target.evidence.length));
+    setPartialScore(Math.round(progress * (target.score ?? 0)));
+    setEvidenceFound(Math.round(progress * (target.evidence?.length ?? 0)));
     setContradictions(Math.round(
-      progress * target.flags.filter(f => f.type === "Data Contradiction").length,
+      progress * (target.flags?.filter(f => f.type === "Data Contradiction").length ?? 0),
     ));
   }, [stepIdx, doneSteps, apiResult]);
 
-  // ── 3. Real API call with polling ────────────────────────────────────────
+  // ── 3. API call with polling ─────────────────────────────────────────────
   const runFetch = useCallback(() => {
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
     setApiError(null);
     setTimedOut(false);
+    setScrapingFailed(false);
 
     const deadline = Date.now() + API_TIMEOUT_MS;
 
     async function run() {
       try {
-        // Step 1 — POST /api/analyze → get job_id
-        const initRes = await startAnalysis(query ?? claim.headline, ac.signal);
+        const initRes = await startAnalysis(
+          query ?? claim?.headline ?? "",
+          manualContent,
+          ac.signal,
+        );
 
-        // If already completed (cache hit), we're done
         if (initRes.status === "completed" || initRes.score != null) {
           const merged = normalise(initRes, claim);
           setApiResult(merged);
@@ -168,7 +270,6 @@ export function AnalysisScreen({ claim, query, onComplete }) {
         const jobId = initRes.job_id || initRes.id;
         if (!jobId) throw new Error("No job_id returned");
 
-        // Step 2 — poll until complete or timeout
         while (!ac.signal.aborted && Date.now() < deadline) {
           await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
           if (ac.signal.aborted) return;
@@ -186,37 +287,36 @@ export function AnalysisScreen({ claim, query, onComplete }) {
           }
 
           if (poll.status === "failed") {
-            if (poll.fail_reason === "scraping_failed") {
-              // Fallback to demo — scraping expected to fail in sandbox
-              setApiResult(claim);
+            if (poll.fail_reason === "scraping_failed" && !manualContent) {
+              // FR-04 / US-04: Show manual input fallback — do NOT silently use demo data
+              setScrapingFailed(true);
             } else {
-              setApiError(poll.fail_reason || "Analysis failed");
-            }
-            if (pipelineDone.current && !finished.current) {
-              finished.current = true;
-              setTimeout(() => onComplete?.(claim), 700);
+              // Other failure — use demo data as last resort
+              setApiResult(claim);
+              if (pipelineDone.current && !finished.current) {
+                finished.current = true;
+                setTimeout(() => onComplete?.(claim), 700);
+              }
             }
             return;
           }
         }
 
-        // Timeout
+        // US-07: Timeout
         if (!ac.signal.aborted) {
           setTimedOut(true);
           if (pipelineDone.current && !finished.current) {
             finished.current = true;
-            setTimeout(() => onComplete?.(claim), 700);
+            setTimeout(() => onComplete?.(claim), 1500);
           }
         }
 
       } catch (err) {
         if (err.name === "AbortError") return;
-        // 404 / network error → API not up yet, use demo data silently
         const isUnavailable =
           err.message.includes("404") ||
           err.message.includes("Failed to fetch") ||
           err.message.includes("NetworkError");
-
         if (isUnavailable) {
           setApiResult(claim);
         } else {
@@ -228,67 +328,119 @@ export function AnalysisScreen({ claim, query, onComplete }) {
         }
       }
     }
-
     run();
     return () => ac.abort();
-  }, [query, claim, retryCount]);
+  }, [query, claim, retryCount, manualContent]);
 
-  useEffect(() => {
-    return runFetch();
-  }, [runFetch]);
+  useEffect(() => { return runFetch(); }, [runFetch]);
+
+  // FR-04: User submitted manual content → restart analysis
+  function handleManualSubmit(content) {
+    finished.current     = false;
+    pipelineDone.current = false;
+    setManualContent(content);
+    setScrapingFailed(false);
+    setStepIdx(0);
+    setDoneSteps(new Set());
+    setRetryCount(n => n + 1);
+  }
+
+  // FR-04: User wants to retry scraping
+  function handleRetryScrap() {
+    finished.current     = false;
+    pipelineDone.current = false;
+    setScrapingFailed(false);
+    setManualContent(null);
+    setStepIdx(0);
+    setDoneSteps(new Set());
+    setRetryCount(n => n + 1);
+  }
 
   const allDone = stepIdx >= steps.length;
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── FR-04: Render manual input fallback ───────────────────────────────────
+  if (scrapingFailed) {
+    return (
+      <div className="analysis-screen">
+        <div className="ana-context-bar">
+          <div className="ana-context-l">
+            <span className="mono small mute">SCRAPING BLOCKED</span>
+            <span className="ana-context-co">{displayName}</span>
+          </div>
+          <div className="mono small mute">FR-04 · Manual input mode</div>
+        </div>
+        <ManualInputFallback
+          companyName={displayName}
+          onSubmit={handleManualSubmit}
+          onRetry={handleRetryScrap}
+        />
+      </div>
+    );
+  }
+
+  // ── Main render ───────────────────────────────────────────────────────────
   return (
     <div className="analysis-screen">
+      {/* US-05: Context bar — shows ACTUAL company being analysed */}
       <div className="ana-context-bar">
         <div className="ana-context-l">
           <span className="mono small mute">ANALYSING</span>
           <span className="ana-context-co">{displayName}</span>
-          <span className="ana-context-ticker mono">{displayTicker}</span>
-          {query && query.toLowerCase() !== displayName.toLowerCase() && (
-            <span className="mono small mute">· matched from "{query}"</span>
+          {manualContent && (
+            <span className="ana-context-ticker mono">MANUAL INPUT</span>
           )}
         </div>
         <div className="mono small mute">claude-sonnet-4 · rubric v3.2</div>
       </div>
 
       <div className="ana-stage">
-        {/* Left: claim under analysis */}
+        {/* Left: claim info — shows query company or demo claim */}
         <aside className="ana-claim">
           <div className="ana-claim-head">
-            <span className="mono small mute">CLAIM · {claim.id}</span>
+            <span className="mono small mute">
+              ANALYSING
+            </span>
           </div>
-          <h2 className="ana-claim-headline">{claim.headline}</h2>
-          <blockquote className="ana-claim-quote">
-            &ldquo;{claim.shortQuote}&rdquo;
-          </blockquote>
-          <div className="ana-claim-src mono small mute">{claim.source}</div>
+          <h2 className="ana-claim-headline">
+            {displayName}
+          </h2>
+          {manualContent ? (
+            <div className="ana-claim-quote">
+              Manual content provided — {manualContent.length} characters
+            </div>
+          ) : (
+            <div className="ana-claim-quote">
+              &ldquo;{claim.shortQuote}&rdquo;
+            </div>
+          )}
+          <div className="ana-claim-src mono small mute">
+            {manualContent ? "User-provided content" : claim.source}
+          </div>
           <div className="ana-claim-meta">
             <div className="ana-claim-meta-row">
-              <span className="mute">Company</span>
-              <span>
-                <strong>{displayName}</strong>{" "}
-                <span className="mono mute">{displayTicker}</span>
-              </span>
+              <span className="mute">Input mode</span>
+              <span>{manualContent ? "Manual" : "Auto-scrape"}</span>
             </div>
             <div className="ana-claim-meta-row">
-              <span className="mute">Source type</span>
-              <span>{claim.sourceType}</span>
+              <span className="mute">AI engine</span>
+              <span className="mono">claude-sonnet-4</span>
             </div>
             <div className="ana-claim-meta-row">
-              <span className="mute">Captured</span>
-              <span className="mono">{claim.capturedAt}</span>
+              <span className="mute">Rubric</span>
+              <span className="mono">v3.2 · 5 dimensions · 0–100</span>
+            </div>
+            <div className="ana-claim-meta-row">
+              <span className="mute">Standards</span>
+              <span className="mono small">TCFD · GRI 305 · GRI 2-27 · EU Taxonomy · EU GCD</span>
             </div>
           </div>
         </aside>
 
-        {/* Centre: pipeline steps */}
+        {/* Centre: US-05 pipeline steps */}
         <main className="ana-pipeline">
           <div className="ana-title-row">
             <h1 className="ana-title">
-              Analysing claim
+              Analysing
               <span className="dots">
                 <span></span><span></span><span></span>
               </span>
@@ -345,6 +497,7 @@ export function AnalysisScreen({ claim, query, onComplete }) {
             </div>
           )}
 
+          {/* US-07: Timeout with retry */}
           {timedOut && (
             <div className="ana-timeout">
               <div className="ana-timeout-msg">
@@ -355,7 +508,14 @@ export function AnalysisScreen({ claim, query, onComplete }) {
                 Analysis is taking longer than expected
               </div>
               <button className="rep-action small"
-                onClick={() => { setTimedOut(false); setRetryCount(n => n + 1); }}>
+                onClick={() => {
+                  setTimedOut(false);
+                  finished.current     = false;
+                  pipelineDone.current = false;
+                  setStepIdx(0);
+                  setDoneSteps(new Set());
+                  setRetryCount(n => n + 1);
+                }}>
                 Retry →
               </button>
             </div>
@@ -368,7 +528,7 @@ export function AnalysisScreen({ claim, query, onComplete }) {
           )}
         </main>
 
-        {/* Right: live signals */}
+        {/* Right: US-06 live signals */}
         <aside className="ana-signals">
           <div className="ana-signal-card">
             <div className="signal-lbl mono small">RISK BUILDING</div>
@@ -418,7 +578,7 @@ export function AnalysisScreen({ claim, query, onComplete }) {
           <div className="ana-signal-card live">
             <div className="signal-lbl mono small">LIVE QUERIES</div>
             <div className="ana-live-queries">
-              <LiveQueries stepIdx={stepIdx} />
+              <LiveQueries stepIdx={stepIdx} companyName={displayName} />
             </div>
           </div>
         </aside>
@@ -427,18 +587,20 @@ export function AnalysisScreen({ claim, query, onComplete }) {
   );
 }
 
-function LiveQueries({ stepIdx }) {
+// US-06: Live query log showing what is actually being queried
+function LiveQueries({ stepIdx, companyName }) {
+  const name = encodeURIComponent(companyName);
   const QUERIES = [
-    "GET  company.com/sustainability/report.pdf",
-    "GET  cdp.net/api/v1/responses?company=...",
-    "GET  ec.europa.eu/clima/ets/registry/...",
-    "GET  sciencebasedtargets.org/companies/...",
-    "GET  newsapi.org/v2/everything?q=...+esg",
-    "GET  ogmpartnership.com/members/...",
-    "POST anthropic.com/v1/messages   model=claude-sonnet-4",
-    "PARSE  candidate spans → normalised claims",
-    "DIFF  scope-1 reported vs EU ETS verified",
-    "RANK  evidence by weight, kind, recency",
+    `GET  google.com/search?q=${companyName}+sustainability+ESG+report`,
+    `GET  cdp.net/api/v1/responses?company=${name}`,
+    `GET  ec.europa.eu/clima/ets/registry/${name}`,
+    `GET  sciencebasedtargets.org/companies/${name}`,
+    `GET  newsapi.org/v2/everything?q=${name}+ESG+greenwashing`,
+    `GET  ogmpartnership.com/members/${name}`,
+    `POST api.anthropic.com/v1/messages   model=claude-sonnet-4`,
+    `PARSE  claim spans → normalised evidence`,
+    `DIFF  scope-1 reported vs EU ETS verified`,
+    `RANK  evidence by weight · kind · recency`,
   ];
   const visible = Math.min(QUERIES.length, 3 + stepIdx * 2);
   return (

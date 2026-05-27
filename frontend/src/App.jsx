@@ -1,5 +1,10 @@
 // App.jsx — main shell: top bar, left watchlist, main canvas, evidence drawer.
 // Drives the route between Landing → Company portfolio → Analysis → Report.
+//
+// Patches applied vs original:
+//   US-03: Landing hints → real demo companies (Shell, H&M, Patagonia, Tesla, BP)
+//   US-04: Real-company searches pass templateClaim so AnalysisScreen shows correct name
+//   US-05: WatchlistScreen handleAnalyse also uses templateClaim
 
 import React, { useState, useEffect, useMemo } from "react";
 import { GWD_DATA } from "./data.js";
@@ -81,13 +86,42 @@ function applyPalette(name) {
   Object.entries(p).forEach(([k, v]) => root.style.setProperty(k, v));
 }
 
-// Tab configs
+// ── US-03: Demo companies pre-cached in local_cache.json ─────────────────────
+// These get real data from the backend; any input is acceptable too.
+const DEMO_COMPANIES = ["shell", "h&m", "patagonia", "tesla", "bp"];
+
+// Build a minimal "live analysis" claim template for external company searches.
+// AnalysisScreen fetches real data and overwrites every field.
+function makeLiveClaim(companyName) {
+  const base = GWD_DATA.CLAIMS[0]; // structural template only
+  return {
+    ...base,
+    id:             "LIVE",
+    headline:       companyName,
+    shortQuote:     `Analysing ${companyName}'s sustainability claims…`,
+    source:         "GreenCheck live analysis",
+    sourceType:     "AI Analysis",
+    capturedAt:     new Date().toISOString().slice(0, 10),
+    analyzedAt:     new Date().toISOString().slice(0, 10),
+    company_name:   companyName,
+    score:          0,
+    riskLevel:      "—",
+    risk_level:     "—",
+    summary:        "",
+    confidence:     0.85,
+    flags:          [],
+    evidence:       [],
+    dimensionScores: { specificity: 0, data_consistency: 0, third_party_certification: 0, negative_news: 0, greenwashing_language: 0 },
+  };
+}
+
+// Tab configs — US-03: hints are the five pre-cached real companies
 const TABS = [
   {
     id: "company",
     label: "Company",
-    placeholder: "Name, ticker, or ISIN — e.g. Petrovera Global, PTV.L…",
-    hints: ["Petrovera Global", "AltaVia Energy", "Cirroban Fashion"],
+    placeholder: "Company name, ticker, or ISIN — e.g. Shell, Tesla, H&M…",
+    hints: ["Shell", "H&M", "Patagonia", "Tesla", "BP"],
   },
   {
     id: "claim",
@@ -104,16 +138,21 @@ const TABS = [
 ];
 
 function LandingScreen({ onCompany, onAnalyze }) {
-  const [activeTab, setActiveTab] = useState("company");
-  const [inputValue, setInputValue] = useState("");
+  const [activeTab, setActiveTab]     = useState("company");
+  const [inputValue, setInputValue]   = useState("");
   const [validationMsg, setValidationMsg] = useState("");
   const inputRef = React.useRef(null);
   const tab = TABS.find(t => t.id === activeTab);
 
   useEffect(() => { inputRef.current?.focus(); }, [activeTab]);
-  useEffect(() => { if (validationMsg) { const t = setTimeout(() => setValidationMsg(""), 3000); return () => clearTimeout(t); } }, [validationMsg]);
+  useEffect(() => {
+    if (validationMsg) {
+      const t = setTimeout(() => setValidationMsg(""), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [validationMsg]);
 
-  // US-01: search triggers analysis pipeline (US-02) not company overview
+  // US-01: search triggers analysis pipeline
   function handleAnalyze() {
     const val = inputValue.trim();
     if (!val) {
@@ -121,16 +160,27 @@ function LandingScreen({ onCompany, onAnalyze }) {
       inputRef.current?.focus();
       return;
     }
-    // Try to match by claim content first
+
     const lower = val.toLowerCase();
     const claims = GWD_DATA.CLAIMS;
+
+    // US-03 / US-05: Real cached companies → use templateClaim so AnalysisScreen
+    // shows the correct company name and the backend returns real data.
+    const isRealCompany = DEMO_COMPANIES.some(d => lower.includes(d) || d.includes(lower));
+    if (isRealCompany) {
+      onAnalyze(makeLiveClaim(val), val);
+      return;
+    }
+
+    // For claims pasted in the Claim tab or other input:
+    // try to match by content first, then fall back to deterministic hash
     const byContent = claims.find(cl =>
       cl.headline.toLowerCase().includes(lower) ||
       cl.shortQuote.toLowerCase().includes(lower)
     );
-    // Otherwise distribute across all claims by hash of query
-    // so different inputs consistently return different (but deterministic) results
-    const byHash = claims[val.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % claims.length];
+    const byHash = claims[
+      val.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % claims.length
+    ];
     onAnalyze(byContent ?? byHash, val);
   }
 
@@ -165,7 +215,7 @@ function LandingScreen({ onCompany, onAnalyze }) {
                   </svg>
                   <span>Drop a PDF or <span className="lv2-upload-link">browse files</span></span>
                   <input type="file" accept=".pdf" style={{ display: "none" }}
-                    onChange={() => gwdToast("PDF upload not wired in this sandbox", { kind: "warn" })} />
+                    onChange={() => gwdToast("PDF upload: paste the company name to trigger analysis", { kind: "warn" })} />
                 </label>
               ) : (
                 <>
@@ -174,10 +224,15 @@ function LandingScreen({ onCompany, onAnalyze }) {
                       <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.4" fill="none"/>
                       <path d="M11 11 L14 14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
                     </svg>
-                    <input ref={inputRef} value={inputValue}
+                    <input
+                      ref={inputRef}
+                      value={inputValue}
                       onChange={e => { setInputValue(e.target.value); setValidationMsg(""); }}
                       onKeyDown={e => e.key === "Enter" && handleAnalyze()}
-                      placeholder={tab.placeholder} className="lv2-input" autoFocus />
+                      placeholder={tab.placeholder}
+                      className="lv2-input"
+                      autoFocus
+                    />
                     {inputValue && (
                       <button className="lv2-clear" onClick={() => { setInputValue(""); inputRef.current?.focus(); }}>
                         <svg viewBox="0 0 12 12" width="9" height="9"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
@@ -194,12 +249,17 @@ function LandingScreen({ onCompany, onAnalyze }) {
             {/* US-01 AC2: validation message */}
             {validationMsg && <p className="lv2-validation">{validationMsg}</p>}
 
+            {/* US-03: Quick-access chips — real demo companies */}
             {!validationMsg && tab.hints.length > 0 && (
               <div className="lv2-hints">
                 <span className="lv2-hints-lbl mono">Try:</span>
                 {tab.hints.map(h => (
                   <button key={h} className="lv2-hint"
-                    onClick={() => { setInputValue(h); setValidationMsg(""); inputRef.current?.focus(); }}>
+                    onClick={() => {
+                      setInputValue(h);
+                      setValidationMsg("");
+                      inputRef.current?.focus();
+                    }}>
                     {h}
                   </button>
                 ))}
@@ -212,7 +272,7 @@ function LandingScreen({ onCompany, onAnalyze }) {
               <span>Company Portfolio</span><span className="lv2-nav-arr">→</span>
             </button>
             <span className="lv2-nav-sep">·</span>
-            <button className="lv2-nav-item" onClick={() => { onCompany(); }}>
+            <button className="lv2-nav-item" onClick={onCompany}>
               <span>Recent Analyses</span><span className="lv2-nav-arr">→</span>
             </button>
             <span className="lv2-nav-sep">·</span>
@@ -230,7 +290,7 @@ function LandingScreen({ onCompany, onAnalyze }) {
 function CompanyScreen({ onAnalyze, onReport, onOpenEvidence }) {
   const c = GWD_DATA.COMPANY;
   const claims = GWD_DATA.CLAIMS;
-  const [sort, setSort] = useState("score-desc");
+  const [sort, setSort]     = useState("score-desc");
   const [filter, setFilter] = useState("all");
   const peers = GWD_DATA.PEERS;
 
@@ -298,10 +358,15 @@ function CompanyScreen({ onAnalyze, onReport, onOpenEvidence }) {
                   <td className="mono mute">{String(i + 1).padStart(2, "0")}</td>
                   <td>{p.name}{p.self && <span className="self-tag mono">YOU</span>}</td>
                   <td className="mono mute">{p.ticker}</td>
-                  <td className="ta-r mono" style={{ color: p.risk > 60 ? "var(--c-bad)" : p.risk > 30 ? "var(--c-warn)" : "var(--c-ok)" }}>{p.risk}</td>
+                  <td className="ta-r mono" style={{ color: p.risk > 60 ? "var(--c-bad)" : p.risk > 30 ? "var(--c-warn)" : "var(--c-ok)" }}>
+                    {p.risk}
+                  </td>
                   <td className="ta-r" style={{ width: 120 }}>
                     <div className="peer-bar">
-                      <div className="peer-bar-fill" style={{ width: p.risk + "%", background: p.risk > 60 ? "var(--c-bad)" : p.risk > 30 ? "var(--c-warn)" : "var(--c-ok)" }}></div>
+                      <div className="peer-bar-fill" style={{
+                        width: p.risk + "%",
+                        background: p.risk > 60 ? "var(--c-bad)" : p.risk > 30 ? "var(--c-warn)" : "var(--c-ok)",
+                      }}></div>
                     </div>
                   </td>
                 </tr>
@@ -321,7 +386,11 @@ function CompanyScreen({ onAnalyze, onReport, onOpenEvidence }) {
             <div className="co-trend-lbl mono small mute">12-MONTH AGGREGATE RISK</div>
             <div className="co-trend-vals">
               {[58, 60, 59, 61, 62, 60, 63, 64, 63, 65, 66, 67].map((v, i) => (
-                <div key={i} className="co-trend-bar" style={{ height: ((v - 50) * 3) + "px", background: v > 60 ? "var(--c-bad)" : v > 30 ? "var(--c-warn)" : "var(--c-ok)", opacity: 0.55 + i * 0.035 }}></div>
+                <div key={i} className="co-trend-bar" style={{
+                  height: ((v - 50) * 3) + "px",
+                  background: v > 60 ? "var(--c-bad)" : v > 30 ? "var(--c-warn)" : "var(--c-ok)",
+                  opacity: 0.55 + i * 0.035,
+                }}></div>
               ))}
             </div>
             <div className="co-trend-axis mono small mute">
@@ -340,25 +409,38 @@ function CompanyScreen({ onAnalyze, onReport, onOpenEvidence }) {
           </div>
           <div className="co-portfolio-tools">
             <div className="seg">
-              <button className={"seg-btn" + (filter === "all" ? " on" : "")}    onClick={() => setFilter("all")}>All <span className="mono mute">{claims.length}</span></button>
-              <button className={"seg-btn" + (filter === "high" ? " on" : "")}   onClick={() => setFilter("high")}>High <span className="mono mute">{claims.filter(x=>x.score>60).length}</span></button>
-              <button className={"seg-btn" + (filter === "medium" ? " on" : "")} onClick={() => setFilter("medium")}>Medium <span className="mono mute">{claims.filter(x=>x.score>30&&x.score<=60).length}</span></button>
-              <button className={"seg-btn" + (filter === "low" ? " on" : "")}    onClick={() => setFilter("low")}>Low <span className="mono mute">{claims.filter(x=>x.score<=30).length}</span></button>
+              <button className={"seg-btn" + (filter === "all"    ? " on" : "")} onClick={() => setFilter("all")}>
+                All <span className="mono mute">{claims.length}</span>
+              </button>
+              <button className={"seg-btn" + (filter === "high"   ? " on" : "")} onClick={() => setFilter("high")}>
+                High <span className="mono mute">{claims.filter(x => x.score > 60).length}</span>
+              </button>
+              <button className={"seg-btn" + (filter === "medium" ? " on" : "")} onClick={() => setFilter("medium")}>
+                Medium <span className="mono mute">{claims.filter(x => x.score > 30 && x.score <= 60).length}</span>
+              </button>
+              <button className={"seg-btn" + (filter === "low"    ? " on" : "")} onClick={() => setFilter("low")}>
+                Low <span className="mono mute">{claims.filter(x => x.score <= 30).length}</span>
+              </button>
             </div>
-            <select className="co-sort mono small" value={sort} onChange={(e) => setSort(e.target.value)}>
+            <select className="co-sort mono small" value={sort} onChange={e => setSort(e.target.value)}>
               <option value="score-desc">Risk: high → low</option>
               <option value="score-asc">Risk: low → high</option>
             </select>
-            <button className="rep-action small" onClick={() => { onAnalyze(claims[0]); gwdToast("Starting fresh analysis run…"); }}>+ New analysis</button>
+            <button className="rep-action small" onClick={() => { onAnalyze(claims[0]); gwdToast("Starting fresh analysis run…"); }}>
+              + New analysis
+            </button>
           </div>
         </div>
 
         <ul className="claim-list">
-          {sortedClaims.map((cl) => (
-            <ClaimRow key={cl.id} claim={cl}
-                      onAnalyze={() => onAnalyze(cl)}
-                      onReport={() => onReport(cl)}
-                      onEvidence={() => onOpenEvidence(cl)} />
+          {sortedClaims.map(cl => (
+            <ClaimRow
+              key={cl.id}
+              claim={cl}
+              onAnalyze={() => onAnalyze(cl)}
+              onReport={() => onReport(cl)}
+              onEvidence={() => onOpenEvidence(cl)}
+            />
           ))}
         </ul>
       </section>
@@ -377,10 +459,9 @@ function StatCell({ lbl, val, mono, small }) {
 
 function ClaimRow({ claim, onAnalyze, onReport, onEvidence }) {
   const band = riskBand(claim.score);
-  const [hover, setHover] = useState(false);
   const topFlag = claim.flags[0];
   return (
-    <li className={"claim-row r-" + band.tone} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+    <li className={"claim-row r-" + band.tone}>
       <div className="claim-row-l">
         <div className="claim-row-id mono small mute">{claim.id}</div>
         <h4 className="claim-row-headline">{claim.headline}</h4>
@@ -406,7 +487,9 @@ function ClaimRow({ claim, onAnalyze, onReport, onEvidence }) {
         <div className="claim-row-score">
           <div className="claim-row-score-num" style={{ color: bandColor(band.tone) }}>{claim.score}</div>
           <div className="claim-row-score-band" style={{ color: bandColor(band.tone) }}>{band.label}</div>
-          <div className="claim-row-score-out mono small mute">/100 · {claim.flags.length} flags · {claim.evidence.length} sources</div>
+          <div className="claim-row-score-out mono small mute">
+            /100 · {claim.flags.length} flags · {claim.evidence.length} sources
+          </div>
         </div>
         <div className="claim-row-actions">
           <button className="rep-action small" onClick={onReport}>Open report →</button>
@@ -425,7 +508,10 @@ function RiskDonut({ claims }) {
   const seg = (n, color, offset) => {
     const c = 2 * Math.PI * 36;
     const len = (n / total) * c;
-    return <circle r="36" cx="48" cy="48" fill="none" stroke={color} strokeWidth="14" strokeDasharray={`${len} ${c}`} strokeDashoffset={-offset} transform="rotate(-90 48 48)" />;
+    return (
+      <circle r="36" cx="48" cy="48" fill="none" stroke={color} strokeWidth="14"
+        strokeDasharray={`${len} ${c}`} strokeDashoffset={-offset} transform="rotate(-90 48 48)" />
+    );
   };
   const cTotal = 2 * Math.PI * 36;
   let off = 0;
@@ -453,7 +539,7 @@ function RiskDonut({ claims }) {
 
 // ─────────────────────────────────────────────────────── Top bar
 function TopBar({ route, onSearch, onPortfolio, onWatchlist, onReports, onOpenCmd, onOpenSettings }) {
-  const isLanding  = route.name === "landing";
+  const isLanding   = route.name === "landing";
   const isPortfolio = route.name === "company";
   const isWatchlist = route.name === "watchlist";
   const isReports   = route.name === "reports";
@@ -487,14 +573,12 @@ function TopBar({ route, onSearch, onPortfolio, onWatchlist, onReports, onOpenCm
       </div>
       <div className="top-bar-r">
         <NotificationsMenu />
-        {/* ⚙ Settings — distinct from identity */}
         <button className="icon-btn" title="Preferences (⌘,)" onClick={onOpenSettings}>
           <svg viewBox="0 0 16 16" width="14" height="14" fill="none">
             <circle cx="8" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.3"/>
             <path d="M8 1.5v1.2M8 13.3v1.2M1.5 8h1.2M13.3 8h1.2M3.4 3.4l.85.85M11.75 11.75l.85.85M3.4 12.6l.85-.85M11.75 4.25l.85-.85" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
           </svg>
         </button>
-        {/* 👤 Guest — identity / account context only */}
         <UserMenu />
       </div>
     </header>
@@ -514,7 +598,7 @@ function BrandMark() {
 // ─────────────────────────────────────────────────────── Ticker strip
 function TickerStrip() {
   const items = GWD_DATA.WATCHLIST;
-  const loop = [...items, ...items];
+  const loop  = [...items, ...items];
   return (
     <div className="ticker">
       <div className="ticker-lbl mono">LIVE RISK FEED</div>
@@ -523,7 +607,9 @@ function TickerStrip() {
           {loop.map((it, i) => (
             <span key={i} className="ticker-item">
               <span className="ticker-ticker mono">{it.ticker}</span>
-              <span className="ticker-risk mono" style={{ color: it.risk > 60 ? "var(--c-bad)" : it.risk > 30 ? "var(--c-warn)" : "var(--c-ok)" }}>
+              <span className="ticker-risk mono" style={{
+                color: it.risk > 60 ? "var(--c-bad)" : it.risk > 30 ? "var(--c-warn)" : "var(--c-ok)",
+              }}>
                 {it.risk}
               </span>
               <span className={"ticker-delta mono " + (it.delta > 0 ? "up" : it.delta < 0 ? "dn" : "fl")}>
@@ -537,48 +623,56 @@ function TickerStrip() {
   );
 }
 
-// ─────────────────────────────────────────────────────── Sidebar (portfolio context)
+// ─────────────────────────────────────────────────────── Sidebar
 function Sidebar({ route, onPortfolio, onWatchlist, onReports }) {
   const list = GWD_DATA.WATCHLIST.slice(0, 6);
   return (
     <aside className="sidebar">
-      {/* Section nav */}
       <div className="side-section">
         <div className="side-head">
           <div className="side-head-lbl mono small">NAVIGATE</div>
         </div>
         <ul className="side-ctx-nav">
           <li className={"side-ctx-item" + (route.name === "company"   ? " on" : "")} onClick={onPortfolio}>
-            <svg viewBox="0 0 14 14" width="12" height="12" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2"/><path d="M3 5h8M3 7.5h5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/></svg>
+            <svg viewBox="0 0 14 14" width="12" height="12" fill="none">
+              <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2"/>
+              <path d="M3 5h8M3 7.5h5" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+            </svg>
             Portfolio
           </li>
           <li className={"side-ctx-item" + (route.name === "watchlist" ? " on" : "")} onClick={onWatchlist}>
-            <svg viewBox="0 0 14 14" width="12" height="12" fill="none"><circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.2"/><path d="M7 4v3.5l2 1.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/></svg>
+            <svg viewBox="0 0 14 14" width="12" height="12" fill="none">
+              <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.2"/>
+              <path d="M7 4v3.5l2 1.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+            </svg>
             Watchlist
           </li>
           <li className={"side-ctx-item" + (route.name === "reports"   ? " on" : "")} onClick={onReports}>
-            <svg viewBox="0 0 14 14" width="12" height="12" fill="none"><path d="M3 2h8v10H3z" stroke="currentColor" strokeWidth="1.2" rx="1"/><path d="M5 5h4M5 7h3M5 9h2" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/></svg>
+            <svg viewBox="0 0 14 14" width="12" height="12" fill="none">
+              <path d="M3 2h8v10H3z" stroke="currentColor" strokeWidth="1.2" rx="1"/>
+              <path d="M5 5h4M5 7h3M5 9h2" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+            </svg>
             Reports
           </li>
         </ul>
       </div>
 
-      {/* Quick-access watchlist */}
       <div className="side-section">
         <div className="side-head">
           <div className="side-head-lbl mono small">WATCHLIST</div>
           <button className="side-head-btn" onClick={onWatchlist} title="See all">All →</button>
         </div>
         <ul className="side-list">
-          {list.map((c) => (
+          {list.map(c => (
             <li key={c.id} className={"side-item" + (c.id === "petrovera-global" && route.name === "company" ? " on" : "")}>
               <div className="side-item-l">
                 <div className="side-item-name">{c.name}</div>
                 <div className="side-item-meta mono small mute">{c.ticker}</div>
               </div>
               <div className="side-item-r">
-                <div className="side-item-risk mono"
-                  style={{ color: c.risk > 60 ? "var(--c-bad)" : c.risk > 30 ? "var(--c-warn)" : "var(--c-ok)" }}>
+                <div className="side-item-risk mono" style={{
+                  color: c.risk > 60 ? "var(--c-bad)" : c.risk > 30 ? "var(--c-warn)" : "var(--c-ok)",
+                }}>
                   {c.risk}
                 </div>
                 <div className={"side-item-delta mono " + (c.delta > 0 ? "up" : c.delta < 0 ? "dn" : "fl")}>
@@ -599,30 +693,14 @@ function Sidebar({ route, onPortfolio, onWatchlist, onReports }) {
   );
 }
 
-function FilterRow({ label, value }) {
-  return (
-    <button className="filter-row">
-      <span className="filter-row-l mono small mute">{label}</span>
-      <span className="filter-row-r">{value} <span className="mute">▾</span></span>
-    </button>
-  );
-}
-
-function routeLabel(route) {
-  const labels = { landing: "Search", company: "Portfolio", watchlist: "Watchlist", reports: "Reports", analysis: "Analysis", report: "Report" };
-  return labels[route.name] ?? route.name;
-}
-
-// ─────────────────────────────────────────────── Watchlist screen (US-08 secondary)
+// ─────────────────────────────────────────── Watchlist screen
 function WatchlistScreen({ onAnalyze }) {
   const list = GWD_DATA.WATCHLIST;
 
+  // US-05: Always pass a templateClaim so AnalysisScreen shows the correct company name.
+  // The backend returns real data; AnalysisScreen normalise() overwrites the template.
   function handleAnalyse(c) {
-    // Distribute claims across companies deterministically by name hash
-    // so each company consistently maps to a different claim score in the demo
-    const claims = GWD_DATA.CLAIMS;
-    const idx = c.name.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % claims.length;
-    onAnalyze(claims[idx], c.name);
+    onAnalyze(makeLiveClaim(c.name), c.name);
   }
 
   return (
@@ -634,8 +712,9 @@ function WatchlistScreen({ onAnalyze }) {
           <p className="co-head-blurb">{list.length} companies · live risk feed · updated every 15 min</p>
         </div>
         <div className="wl-head-r">
-          <span className="wl-demo-badge mono small">SANDBOX — Petrovera data used for all analyses</span>
-          <button className="rep-action" onClick={() => gwdToast("Add company requires backend API", { kind: "warn" })}>+ Add company</button>
+          <button className="rep-action" onClick={() => gwdToast("Add company requires backend API", { kind: "warn" })}>
+            + Add company
+          </button>
         </div>
       </header>
       <table className="wl-table">
@@ -646,13 +725,18 @@ function WatchlistScreen({ onAnalyze }) {
           </tr>
         </thead>
         <tbody>
-          {list.slice().sort((a,b) => b.risk - a.risk).map((c, i) => (
+          {list.slice().sort((a, b) => b.risk - a.risk).map((c, i) => (
             <tr key={c.id}>
-              <td className="mono mute">{String(i+1).padStart(2,"0")}</td>
+              <td className="mono mute">{String(i + 1).padStart(2, "0")}</td>
               <td className="wl-name">{c.name}</td>
               <td className="mono mute">{c.ticker}</td>
               <td className="mute small">{c.sector}</td>
-              <td className="ta-r mono" style={{ color: c.risk > 60 ? "var(--c-bad)" : c.risk > 30 ? "var(--c-warn)" : "var(--c-ok)", fontWeight: 600 }}>{c.risk}</td>
+              <td className="ta-r mono" style={{
+                color: c.risk > 60 ? "var(--c-bad)" : c.risk > 30 ? "var(--c-warn)" : "var(--c-ok)",
+                fontWeight: 600,
+              }}>
+                {c.risk}
+              </td>
               <td className={"ta-r mono small " + (c.delta > 0 ? "r-bad" : c.delta < 0 ? "r-ok" : "mute")}>
                 {c.delta > 0 ? "▲" : c.delta < 0 ? "▼" : "·"}{Math.abs(c.delta)}
               </td>
@@ -669,7 +753,7 @@ function WatchlistScreen({ onAnalyze }) {
   );
 }
 
-// ─────────────────────────────────────────────── Reports screen (US-07/US-08 history)
+// ─────────────────────────────────────────────── Reports screen
 function ReportsScreen({ onOpenReport }) {
   const claims = GWD_DATA.CLAIMS;
   return (
@@ -680,10 +764,12 @@ function ReportsScreen({ onOpenReport }) {
           <h1 className="co-head-title">Analysis History</h1>
           <p className="co-head-blurb">{claims.length} reports · Petrovera Global plc · FY 2024</p>
         </div>
-        <button className="rep-action" onClick={() => gwdToast("Bulk export queued", { kind: "ok" })}>Export all ↓</button>
+        <button className="rep-action" onClick={() => gwdToast("Bulk export queued", { kind: "ok" })}>
+          Export all ↓
+        </button>
       </header>
       <ul className="rpts-list">
-        {claims.map((cl, i) => {
+        {claims.map(cl => {
           const band = riskBand(cl.score);
           return (
             <li key={cl.id} className="rpts-row" onClick={() => onOpenReport(cl)}>
@@ -693,14 +779,19 @@ function ReportsScreen({ onOpenReport }) {
                 <div className="rpts-src mono small mute">{cl.source} · {cl.sourceType}</div>
               </div>
               <div className="rpts-r">
-                <div className="rpts-score mono" style={{ color: band.tone === "bad" ? "var(--c-bad)" : band.tone === "warn" ? "var(--c-warn)" : "var(--c-ok)" }}>
+                <div className="rpts-score mono" style={{
+                  color: band.tone === "bad" ? "var(--c-bad)" : band.tone === "warn" ? "var(--c-warn)" : "var(--c-ok)",
+                }}>
                   {cl.score}
                 </div>
                 <div className="rpts-band small mute">{cl.riskLevel}</div>
               </div>
               <div className="rpts-actions">
                 <button className="rep-action small" onClick={e => { e.stopPropagation(); onOpenReport(cl); }}>Open →</button>
-                <button className="rep-action small ghost" onClick={e => { e.stopPropagation(); gwdToast(`${cl.id}_report.pdf queued`, { kind: "ok", icon: "↓" }); }}>PDF ↓</button>
+                <button className="rep-action small ghost" onClick={e => {
+                  e.stopPropagation();
+                  gwdToast(`${cl.id}_report.pdf queued`, { kind: "ok", icon: "↓" });
+                }}>PDF ↓</button>
               </div>
             </li>
           );
@@ -713,32 +804,32 @@ function ReportsScreen({ onOpenReport }) {
 // ─────────────────────────────────────────────────────── Root App
 export default function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
   useEffect(() => { applyPalette(t.palette); }, [t.palette]);
   useEffect(() => {
-    document.documentElement.style.setProperty("--display-family", t.displayFamily === "sans" ? "var(--font-sans)" : "var(--font-serif)");
+    document.documentElement.style.setProperty(
+      "--display-family",
+      t.displayFamily === "sans" ? "var(--font-sans)" : "var(--font-serif)",
+    );
     document.documentElement.setAttribute("data-density", t.density);
   }, [t.displayFamily, t.density]);
 
-  const [route, setRoute]             = useState({ name: "landing" });
+  const [route,        setRoute]        = useState({ name: "landing" });
   const [evidenceOpen, setEvidenceOpen] = useState(null);
-  const [cmdOpen, setCmdOpen]           = useState(false);
+  const [cmdOpen,      setCmdOpen]      = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // ── Navigation helpers ────────────────────────────────────────────────────
-  const goSearch    = ()      => setRoute({ name: "landing" });
-  const goPortfolio = ()      => setRoute({ name: "company" });
-  const goWatchlist = ()      => setRoute({ name: "watchlist" });
-  const goReports   = ()      => setRoute({ name: "reports" });
-  // US-02: search → analysis pipeline (not direct to company overview)
+  // Navigation helpers
+  const goSearch    = ()             => setRoute({ name: "landing" });
+  const goPortfolio = ()             => setRoute({ name: "company" });
+  const goWatchlist = ()             => setRoute({ name: "watchlist" });
+  const goReports   = ()             => setRoute({ name: "reports" });
   const goAnalyze   = (claim, query) => setRoute({ name: "analysis", claim, query });
-  const goReport    = (claim, query) => setRoute({ name: "report", claim, query });
+  const goReport    = (claim, query) => setRoute({ name: "report",   claim, query });
 
-  // Sidebar only appears in portfolio / watchlist / reports contexts
   const showSidebar = ["company", "watchlist", "reports"].includes(route.name);
-  // Ticker shown everywhere except landing
   const showTicker  = t.showTickerStrip && route.name !== "landing";
 
-  // Global keyboard shortcuts
   useEffect(() => {
     function onKey(e) {
       const mod = e.metaKey || e.ctrlKey;
@@ -751,12 +842,25 @@ export default function App() {
 
   function handleCmdPick(kind, item) {
     if (kind === "company") {
-      if (item.id === "petrovera-global") { goPortfolio(); gwdToast("Opened · Petrovera Global plc"); }
-      else gwdToast(item.name + " not yet in sandbox", { kind: "warn" });
+      // US-05: Command palette also uses templateClaim for real company navigation
+      const isReal = DEMO_COMPANIES.some(d =>
+        item.name.toLowerCase().includes(d) || d.includes(item.name.toLowerCase())
+      );
+      if (isReal) {
+        goAnalyze(makeLiveClaim(item.name), item.name);
+        gwdToast("Analysing · " + item.name);
+      } else if (item.id === "petrovera-global") {
+        goPortfolio();
+        gwdToast("Opened · Petrovera Global plc");
+      } else {
+        gwdToast(item.name + " — triggering live analysis", { kind: "info" });
+        goAnalyze(makeLiveClaim(item.name), item.name);
+      }
     } else if (kind === "claim") {
-      goReport(item); gwdToast("Opened report · " + item.id);
+      goReport(item);
+      gwdToast("Opened report · " + item.id);
     } else if (kind === "action") {
-      if (item.id === "act-new")    { goSearch(); }
+      if (item.id === "act-new")    goSearch();
       if (item.id === "act-export") gwdToast("Report queued for export", { kind: "ok" });
       if (item.id === "act-help")   gwdToast("See §2 of any credibility report");
     }
@@ -771,15 +875,15 @@ export default function App() {
           ["#3D7A8A", "#F7F8FA", "#0F1720"],
           ["#2D6A4F", "#F8F8F5", "#10130E"],
         ]}
-        onChange={(v) => {
+        onChange={v => {
           const key = v[0] === "#3D7A8A" ? "slate" : v[0] === "#2D6A4F" ? "forest" : "sage";
           setTweak("palette", key);
         }}
       />
       <TweakRadio label="Display font" value={t.displayFamily}
-        options={["serif", "sans"]} onChange={(v) => setTweak("displayFamily", v)} />
+        options={["serif", "sans"]} onChange={v => setTweak("displayFamily", v)} />
       <TweakRadio label="Density" value={t.density}
-        options={["compact", "regular", "comfy"]} onChange={(v) => setTweak("density", v)} />
+        options={["compact", "regular", "comfy"]} onChange={v => setTweak("density", v)} />
       <TweakSection label="Report" />
       <TweakSelect label="Score style" value={t.scoreVariant}
         options={[
@@ -787,9 +891,10 @@ export default function App() {
           { value: "bar",    label: "Banded thermometer" },
           { value: "letter", label: "Credit-rating letter" },
         ]}
-        onChange={(v) => setTweak("scoreVariant", v)} />
+        onChange={v => setTweak("scoreVariant", v)}
+      />
       <TweakToggle label="Show ticker strip" value={t.showTickerStrip}
-        onChange={(v) => setTweak("showTickerStrip", v)} />
+        onChange={v => setTweak("showTickerStrip", v)} />
     </TweaksPanel>
   );
 
@@ -807,25 +912,39 @@ export default function App() {
       {showTicker && <TickerStrip />}
 
       <div className="gwd-body">
-        {showSidebar && <Sidebar route={route} onPortfolio={goPortfolio} onWatchlist={goWatchlist} onReports={goReports} />}
+        {showSidebar && (
+          <Sidebar route={route} onPortfolio={goPortfolio} onWatchlist={goWatchlist} onReports={goReports} />
+        )}
         <main className="gwd-main">
-          {/* US-01: entry / search */}
           {route.name === "landing"   && <LandingScreen onCompany={goPortfolio} onAnalyze={goAnalyze} />}
-          {/* US-08: portfolio / history — reached via nav, not the primary flow */}
-          {route.name === "company"   && <CompanyScreen onAnalyze={goAnalyze} onReport={goReport} onOpenEvidence={(c,e) => setEvidenceOpen({ claim: c, ev: e })} />}
+          {route.name === "company"   && <CompanyScreen onAnalyze={goAnalyze} onReport={goReport} onOpenEvidence={(c, e) => setEvidenceOpen({ claim: c, ev: e })} />}
           {route.name === "watchlist" && <WatchlistScreen onAnalyze={goAnalyze} />}
           {route.name === "reports"   && <ReportsScreen onOpenReport={goReport} />}
-          {/* US-02: analysis pipeline (loading state) */}
-          {route.name === "analysis"  && <AnalysisScreen claim={route.claim} query={route.query} onComplete={(result) => goReport(result ?? route.claim, route.query)} />}
-          {/* US-04/05/06/07: the credibility report */}
-          {route.name === "report"    && <ReportScreen claim={route.claim} query={route.query} scoreVariant={t.scoreVariant}
-              onBack={() => { window.history.length > 1 ? goReports() : goPortfolio(); }}
-              onOpenEvidence={(c,e) => setEvidenceOpen({ claim: c, ev: e })} />}
+          {route.name === "analysis"  && (
+            <AnalysisScreen
+              claim={route.claim}
+              query={route.query}
+              onComplete={result => goReport(result ?? route.claim, route.query)}
+            />
+          )}
+          {route.name === "report" && (
+            <ReportScreen
+              claim={route.claim}
+              query={route.query}
+              scoreVariant={t.scoreVariant}
+              onBack={() => goReports()}
+              onOpenEvidence={(c, e) => setEvidenceOpen({ claim: c, ev: e })}
+            />
+          )}
         </main>
       </div>
 
       {evidenceOpen && (
-        <EvidenceDrawer claim={evidenceOpen.claim} ev={evidenceOpen.ev} onClose={() => setEvidenceOpen(null)} />
+        <EvidenceDrawer
+          claim={evidenceOpen.claim}
+          ev={evidenceOpen.ev}
+          onClose={() => setEvidenceOpen(null)}
+        />
       )}
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} onPick={handleCmdPick} />
       <SettingsSheet  open={settingsOpen} onClose={() => setSettingsOpen(false)} />
@@ -834,4 +953,3 @@ export default function App() {
     </div>
   );
 }
-

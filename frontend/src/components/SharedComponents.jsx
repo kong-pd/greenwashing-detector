@@ -1,4 +1,5 @@
 // SharedComponents.jsx — shared visual atoms for the Greenwashing Detector.
+// FR-34: Each scoring dimension now displays its regulatory standard badge.
 import { useState, useEffect, useRef, useMemo } from "react";
 
 // ───────────────────────────────────────────────────────────── helpers
@@ -20,6 +21,74 @@ export function fmt(n, dp = 0) {
   if (n == null) return "—";
   return Number(n).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 }
+
+// ───────────────────────────────────────────────────────────── FR-34: Regulatory Standard Badge
+// Colour map mirrors the organisations' brand guidelines at accessible contrast levels.
+const STANDARD_COLORS = {
+  "TCFD":           { bg: "#E8F0FB", text: "#1A56C4", border: "#A8C0EF" },
+  "GRI 305":        { bg: "#E6F4EC", text: "#1A7A4A", border: "#90CFA8" },
+  "EU Taxonomy":    { bg: "#EAF0FB", text: "#003399", border: "#99B3DD" },
+  "GRI 2-27":       { bg: "#E6F4EC", text: "#1A7A4A", border: "#90CFA8" },
+  "EU GCD 2024":    { bg: "#FFF3E0", text: "#B45309", border: "#F0C97A" },
+};
+
+export function StandardBadge({ standard, compact = false }) {
+  const colors = STANDARD_COLORS[standard] || { bg: "var(--c-bg-2)", text: "var(--c-ink-2)", border: "var(--c-line)" };
+  return (
+    <span
+      className={"std-badge" + (compact ? " compact" : "")}
+      style={{ background: colors.bg, color: colors.text, borderColor: colors.border }}
+      title={`Scored against ${standard}`}
+    >
+      {standard}
+    </span>
+  );
+}
+
+// ───────────────────────────────────────────────────────────── DIMENSION_META
+// FR-34: Each dimension now carries its regulatory standard reference.
+export const DIMENSION_META = [
+  {
+    key: "specificity",
+    label: "Claim Specificity",
+    gloss: "Time-bound, quantifiable targets vs. slogans. Are interim milestones disclosed?",
+    standard: "TCFD",
+    standardFull: "Task Force on Climate-related Financial Disclosures",
+    rubric: { low: "Clear, time-bound targets with baselines", mid: "Goals stated but vague, no timeline", high: "Slogans only — 'committed to', 'striving for'" },
+  },
+  {
+    key: "data_consistency",
+    label: "Data Consistency",
+    gloss: "Alignment with CDP, EU ETS, OGMP 2.0, MethaneSAT and other verified databases.",
+    standard: "GRI 305",
+    standardFull: "GRI 305: Emissions — cross-verification methodology",
+    rubric: { low: "Claims align with verified external data", mid: "Minor discrepancies or unverifiable claims", high: "Claims directly contradict verified data" },
+  },
+  {
+    key: "third_party_certification",
+    label: "Third-Party Verification",
+    gloss: "Independent assurance: SBTi, B Corp, ISCC, CDP A-list, RE100, OGMP Gold Pathway.",
+    standard: "EU Taxonomy",
+    standardFull: "EU Taxonomy Regulation — Art. 8 disclosure requirements",
+    rubric: { low: "Multiple credible independent certifications", mid: "Single or low-credibility certification", high: "No independent verification of any kind" },
+  },
+  {
+    key: "negative_news",
+    label: "Negative News",
+    gloss: "Media coverage, regulatory investigations, litigation, activist campaigns.",
+    standard: "GRI 2-27",
+    standardFull: "GRI 2-27: Compliance with laws and regulations",
+    rubric: { low: "No negative coverage or regulatory action", mid: "Minor controversy, no formal action", high: "Active regulatory investigation or major scandal" },
+  },
+  {
+    key: "greenwashing_language",
+    label: "Greenwashing Language",
+    gloss: "Undefined superlatives, aspirational verbs, buzzwords without data support.",
+    standard: "EU GCD 2024",
+    standardFull: "EU Green Claims Directive 2024 — substantiation requirements",
+    rubric: { low: "Precise language backed by specific data", mid: "Some aspirational verbs alongside data", high: "Heavy 'committed to', 'net-positive', 'green future' with no data" },
+  },
+];
 
 // ───────────────────────────────────────────────────────────── ScoreDial
 export function ScoreDial({ score, variant = "arc", size = 240, label = "Greenwashing Risk" }) {
@@ -137,26 +206,37 @@ export function RiskPill({ score, compact = false }) {
 }
 
 // ───────────────────────────────────────────────────────────── DimensionBars
-export const DIMENSION_META = [
-  { key: "specificity",               label: "Claim Specificity",        gloss: "Time-bound, quantifiable targets vs. slogans." },
-  { key: "data_consistency",          label: "Data Consistency",         gloss: "Alignment with external databases (EU ETS, CDP, OGMP)." },
-  { key: "third_party_certification", label: "Third-Party Verification", gloss: "Independent assurance, ratings, audits." },
-  { key: "negative_news",             label: "Negative News",            gloss: "Media coverage, regulatory action, controversy." },
-  { key: "greenwashing_language",     label: "Greenwashing Language",    gloss: "Aspirational verbs, undefined superlatives, buzzwords." },
-];
-
+// FR-34: Shows regulatory standard badge per dimension when not in dense mode.
 export function DimensionBars({ scores, max = 20, dense = false }) {
+  const [tooltip, setTooltip] = useState(null);
+
   return (
     <div className={"dim-bars" + (dense ? " dense" : "")}>
       {DIMENSION_META.map((d) => {
         const v = scores[d.key] ?? 0;
         const pct = (v / max) * 100;
         const tone = v >= 14 ? "bad" : v >= 8 ? "warn" : "ok";
+        const riskWord = v >= 14 ? d.rubric.high : v >= 8 ? d.rubric.mid : d.rubric.low;
+
         return (
           <div className="dim-row" key={d.key}>
             <div className="dim-row-l">
-              <div className="dim-label">{d.label}</div>
-              {!dense && <div className="dim-gloss">{d.gloss}</div>}
+              <div className="dim-label-row">
+                <div className="dim-label">{d.label}</div>
+                {/* FR-34: Regulatory standard badge */}
+                {!dense && (
+                  <StandardBadge standard={d.standard} compact />
+                )}
+              </div>
+              {!dense && (
+                <>
+                  <div className="dim-gloss">{d.gloss}</div>
+                  <div className="dim-rubric-hint mono small mute">
+                    {v >= 14 ? "▲ HIGH — " : v >= 8 ? "◆ MED — " : "✓ LOW — "}
+                    {riskWord}
+                  </div>
+                </>
+              )}
             </div>
             <div className="dim-row-r">
               <div className="dim-rail">
@@ -265,5 +345,56 @@ export function ReportSection({ kicker, title, children, right }) {
       </header>
       <div className="rep-section-body">{children}</div>
     </section>
+  );
+}
+
+// ───────────────────────────────────────────────────────────── MethodologyPanel
+// FR-34: Displays the full 5-dimension rubric with standard references in a table.
+export function MethodologyPanel() {
+  return (
+    <div className="meth-panel">
+      <div className="meth-intro">
+        <p>
+          Each claim is scored across five dimensions (0–20 per dimension, 0–100 total)
+          aligned to internationally recognised ESG disclosure standards.
+          AI analysis uses Claude Sonnet 4 with a structured system prompt encoding these rubrics;
+          all weights are post-processed through deterministic clamping bands.
+        </p>
+      </div>
+      <table className="meth-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Dimension</th>
+            <th>Standard</th>
+            <th>0 — Low risk</th>
+            <th>10 — Medium risk</th>
+            <th>20 — High risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          {DIMENSION_META.map((d, i) => (
+            <tr key={d.key}>
+              <td className="mono mute">{i + 1}</td>
+              <td>
+                <div className="meth-dim-name">{d.label}</div>
+                <div className="meth-dim-gloss">{d.gloss}</div>
+              </td>
+              <td>
+                <StandardBadge standard={d.standard} />
+                <div className="meth-std-full">{d.standardFull}</div>
+              </td>
+              <td className="meth-cell ok">{d.rubric.low}</td>
+              <td className="meth-cell warn">{d.rubric.mid}</td>
+              <td className="meth-cell bad">{d.rubric.high}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="meth-footer mono small mute">
+        Evidence weights are clamped to kind-specific bands:
+        Filing 0.85–0.95 · Database 0.80–0.92 · News 0.40–0.80 · Document 0.45–0.65 · Linguistic 0.30–0.55
+      </div>
+    </div>
   );
 }

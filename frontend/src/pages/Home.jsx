@@ -1,4 +1,5 @@
-// TODO: Home page
+// Home.jsx — redirects to App's landing screen.
+// The main shell lives in App.jsx; this stub satisfies any direct import.
 export default function Home() {
-  return <div>Home</div>;
+  return null; // App.jsx handles routing
 }
