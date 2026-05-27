@@ -1,11 +1,5 @@
 """
 analysis/main.py — GreenCheck Analysis Service (port 8001)
-
-Fixes vs original:
-  - Added /health endpoint (README promised it, it was missing)
-  - save_result() now persists dimension_scores to Supabase
-  - analysis_flags INSERT now includes severity field
-  - update_step() / save_failed() have clearer error logging
 """
 
 from fastapi import FastAPI
@@ -57,14 +51,11 @@ def update_step(job_id: str, step: str):
 def save_result(job_id: str, result: dict):
     """
     Persist completed analysis result to Supabase.
-    Writes: score, risk_level, summary, evidence (sources),
-            dimension_scores, and per-flag records with severity.
     """
     from datetime import datetime, timezone
     try:
         db = get_db()
 
-        # ── 1. Update job record ─────────────────────────────────────────────
         dim_scores = (
             result.get("dimension_scores")
             or result.get("dimensionScores")
@@ -75,12 +66,11 @@ def save_result(job_id: str, result: dict):
             "score":            result.get("score"),
             "risk_level":       result.get("risk_level"),
             "summary":          result.get("summary"),
-            "sources":          result.get("evidence") or [],   # full evidence array
+            "sources":          result.get("evidence") or [],
             "dimension_scores": dim_scores,
             "completed_at":     datetime.now(timezone.utc).isoformat(),
         }).eq("id", job_id).execute()
 
-        # ── 2. Insert flags ──────────────────────────────────────────────────
         for flag in result.get("flags") or []:
             ftype = flag.get("type", "")
             severity = flag.get("severity") or (
@@ -103,10 +93,17 @@ def save_result(job_id: str, result: dict):
 
     except Exception as e:
         print(f"[{job_id}] save_result failed: {e}")
-        # Non-fatal — in-memory result was already returned to the poller
 
 
 def save_failed(job_id: str, reason: str):
+    """
+    Mark job as failed with a specific reason code.
+
+    Reason codes:
+      scraping_not_found — Google search found no relevant ESG link
+      scraping_blocked   — Found URL but access was blocked / timed out
+      analysis_failed    — AI scoring pipeline failed
+    """
     try:
         get_db().table("analysis_jobs").update({
             "status":      "failed",
@@ -121,11 +118,6 @@ def save_failed(job_id: str, reason: str):
 
 @app.post("/run")
 async def run(req: RunRequest):
-    """
-    Accept a job request and process it asynchronously.
-    Returns immediately with {"status": "started"}.
-    Frontend polls GET /api/report/{job_id} on the backend service.
-    """
     asyncio.create_task(process(req))
     return {"status": "started", "job_id": req.job_id}
 
@@ -136,6 +128,9 @@ async def process(req: RunRequest):
     """
     Full analysis pipeline:
       1. Scrape ESG content (or use manual_content)
+         scraper.py now returns (content, fail_reason) — two distinct failure modes:
+           scraping_not_found — no ESG page found in Google results
+           scraping_blocked   — page found but access denied / timed out
       2. Enrich with external evidence (NewsAPI + CDP stub)
       3. Score with AI (Claude → Gemini → local_cache → mock)
       4. Persist to Supabase
@@ -144,19 +139,27 @@ async def process(req: RunRequest):
     try:
         # ── Step 1: content ──────────────────────────────────────────────────
         update_step(req.job_id, "Fetching company content...")
-        content = req.manual_content
-        if not content:
-            content = await scrape(req.company_name)
-        if not content:
-            print(f"[{req.job_id}] scraping returned nothing — failing")
-            save_failed(req.job_id, "scraping_failed")
-            return
+
+        if req.manual_content:
+            # User-provided content — skip scraping entirely
+            content = req.manual_content
+            print(f"[{req.job_id}] using manual content ({len(content)} chars)")
+        else:
+            # scrape() returns (content, fail_reason)
+            content, fail_reason = await scrape(req.company_name)
+
+            if not content:
+                # Pass the specific fail_reason so the frontend can show
+                # the appropriate banner (not found vs. access blocked)
+                print(f"[{req.job_id}] scraping failed: {fail_reason}")
+                save_failed(req.job_id, fail_reason or "scraping_not_found")
+                return
 
         # ── Step 2: enrich ───────────────────────────────────────────────────
         update_step(req.job_id, "Gathering external data...")
         evidence_list, cdp_data = await enrich(req.company_name)
         print(f"[{req.job_id}] enriched — "
-              f"{len(evidence_list)} evidence items, CDP: {'yes' if cdp_data else 'stub'}")
+              f"{len(evidence_list)} evidence items")
 
         # ── Step 3: AI scoring ───────────────────────────────────────────────
         update_step(req.job_id, "Analysing with AI...")

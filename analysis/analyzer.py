@@ -33,13 +33,11 @@ def _lookup_local_cache(company_name: str) -> dict | None:
 
 
 # ─── Weight clamping ──────────────────────────────────────────────────────────
-# After the AI assigns weights, clamp to the defined band per kind.
-# This ensures the AI cannot deviate from the rules regardless of its output.
 
 WEIGHT_BANDS: dict[str, tuple[float, float]] = {
     "Filing":     (0.85, 0.95),
     "Database":   (0.80, 0.92),
-    "News":       (0.40, 0.80),   # wide band; AI differentiates by outlet tier
+    "News":       (0.40, 0.80),
     "Document":   (0.45, 0.65),
     "Linguistic": (0.30, 0.55),
 }
@@ -47,18 +45,11 @@ WEIGHT_BANDS: dict[str, tuple[float, float]] = {
 def _clamp_weight(kind: str, weight: float | None) -> float:
     lo, hi = WEIGHT_BANDS.get(kind, (0.0, 1.0))
     if weight is None:
-        # AI failed to assign — use midpoint of band
         return round((lo + hi) / 2, 2)
     return round(max(lo, min(hi, float(weight))), 2)
 
 
 def _normalise_evidence(evidence_list: list[dict]) -> list[dict]:
-    """
-    Post-process the evidence list returned by the AI:
-    - Clamp weights to defined bands
-    - Sort by weight descending
-    - Ensure all required fields are present
-    """
     normalised = []
     for item in evidence_list:
         kind   = item.get("kind", "News")
@@ -79,9 +70,6 @@ def _normalise_evidence(evidence_list: list[dict]) -> list[dict]:
 # ─── Evidence list formatter ──────────────────────────────────────────────────
 
 def _format_evidence_for_prompt(evidence_list: list[dict]) -> str:
-    """
-    Format the evidence list as a numbered text block for the AI prompt.
-    """
     if not evidence_list:
         return "No external news articles available."
 
@@ -175,6 +163,7 @@ Return ONLY valid JSON. No explanation, no preamble, no markdown fences.
   "flags": [
     {
       "type":        <"Vague Claims" | "Data Contradiction" | "Lack of Certification" | "Negative News" | "Greenwashing Language">,
+      "severity":    <"high" | "medium" | "low">,
       "description": <1–2 sentence specific finding referencing the content provided>,
       "source":      <specific source name or URL from the evidence list>
     }
@@ -196,6 +185,8 @@ Return ONLY valid JSON. No explanation, no preamble, no markdown fences.
 
 Rules:
 - flags: exactly 3, one per highest-scoring dimension
+- severity: "high" for Data Contradiction and Negative News · "medium" for Vague Claims
+  and Lack of Certification · "low" for Greenwashing Language unless score >= 14
 - evidence: include ALL items from the input evidence list with your assigned weights
 - All weights must fall within the prescribed bands — do not deviate
 - Do not add evidence items that were not in the input list"""
@@ -273,26 +264,16 @@ score the company on all five dimensions, and return the complete JSON result.""
 # ─── Post-processing ──────────────────────────────────────────────────────────
 
 def _process_result(raw: dict, input_evidence: list[dict]) -> dict:
-    """
-    Normalise the AI response:
-    - Clamp and sort evidence weights
-    - Add severity to flags if missing
-    - Add camelCase aliases for frontend compatibility
-    - If AI returned no evidence, fall back to input_evidence with midpoint weights
-    """
-    # Evidence: use AI-weighted version if returned, else fall back to inputs
     evidence_from_ai = raw.get("evidence") or []
     if evidence_from_ai:
         evidence = _normalise_evidence(evidence_from_ai)
     elif input_evidence:
-        # AI didn't return evidence — assign midpoint weights to input items
         evidence = _normalise_evidence([
             {**ev, "weight": None} for ev in input_evidence
         ])
     else:
         evidence = []
 
-    # Flags — add severity if missing
     flags = []
     for f in raw.get("flags") or []:
         ftype = f.get("type", "")
@@ -325,7 +306,7 @@ def _process_result(raw: dict, input_evidence: list[dict]) -> dict:
     }
 
 
-# ─── Model callers ────────────────────────────────────────────────────────────
+# ─── JSON parser ──────────────────────────────────────────────────────────────
 
 def _parse_json(text: str) -> dict:
     """Strip markdown fences and parse JSON."""
@@ -336,11 +317,13 @@ def _parse_json(text: str) -> dict:
     return json.loads(text.strip())
 
 
+# ─── Model callers ────────────────────────────────────────────────────────────
+
 def analyze_with_claude(company_name, content, evidence_list, cdp):
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=2000,   # increased to accommodate evidence array
+        max_tokens=2000,
         system=SYSTEM_PROMPT,
         messages=[{
             "role":    "user",
@@ -353,7 +336,7 @@ def analyze_with_claude(company_name, content, evidence_list, cdp):
 def analyze_with_gemini(company_name, content, evidence_list, cdp):
     genai.configure(api_key=os.environ["GEMINI_API_KEY"])
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
+        model_name="gemini-2.5-flash-lite",
         system_instruction=SYSTEM_PROMPT,
     )
     response = model.generate_content(
@@ -370,16 +353,16 @@ def analyze(company_name: str, content: str,
     """
     Four-layer fallback chain:
       1. Mock mode  (USE_MOCK=true)
-      2. Claude API (primary)
-      3. Gemini API (automatic fallback)
+      2. Claude API (primary)        — with classified exception handling
+      3. Gemini API (automatic fallback) — with classified exception handling
       4. Local cache (zero-network fallback for demo companies)
       5. Generic mock (absolute last resort)
 
-    Args:
-        company_name:  Company name for matching and display
-        content:       Scraped or user-provided ESG content
-        evidence_list: Structured evidence objects from enricher.py
-        cdp:           CDP data string or stub message
+    Exception classification (applied to both Claude and Gemini):
+      [CONFIG_ERROR] — auth failure; developer problem, not transient
+      [TRANSIENT]    — rate limit, timeout, network; silent fallback expected
+      [PARSE_ERROR]  — bad JSON or missing fields in response
+      [UNKNOWN]      — anything else; log prominently for investigation
     """
     ev = evidence_list or []
 
@@ -394,8 +377,26 @@ def analyze(company_name: str, content: str,
         result = _process_result(raw, ev)
         print("Claude API: success")
         return result
+
+    except anthropic.AuthenticationError as e:
+        print(f"[CONFIG_ERROR] Claude auth failed — check ANTHROPIC_API_KEY: {e}")
+
+    except (anthropic.RateLimitError,
+            anthropic.APITimeoutError,
+            anthropic.APIConnectionError) as e:
+        print(f"[TRANSIENT] Claude unavailable ({type(e).__name__}) — falling back to Gemini")
+
+    except anthropic.APIStatusError as e:
+        if e.status_code >= 500:
+            print(f"[TRANSIENT] Claude server error {e.status_code} — falling back to Gemini")
+        else:
+            print(f"[UNEXPECTED] Claude client error {e.status_code}: {e}")
+
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        print(f"[PARSE_ERROR] Claude response malformed — falling back to Gemini: {e}")
+
     except Exception as e:
-        print(f"Claude API failed: {e}")
+        print(f"[UNKNOWN] Unexpected Claude error ({type(e).__name__}) — falling back to Gemini: {e}")
 
     # ── Layer 3: Gemini ───────────────────────────────────────────────────────
     try:
@@ -403,8 +404,20 @@ def analyze(company_name: str, content: str,
         result = _process_result(raw, ev)
         print("Gemini API: success")
         return result
+
     except Exception as e:
-        print(f"Gemini API failed: {e}")
+        # Gemini exceptions vary by SDK version; catch-all with classification logging
+        err_type = type(e).__name__
+        err_str  = str(e).lower()
+
+        if "permission" in err_str or "credential" in err_str or "api key" in err_str:
+            print(f"[CONFIG_ERROR] Gemini auth failed — check GEMINI_API_KEY: {e}")
+        elif "quota" in err_str or "rate" in err_str or "timeout" in err_str:
+            print(f"[TRANSIENT] Gemini unavailable ({err_type}) — falling back to local cache")
+        elif isinstance(e, (json.JSONDecodeError, KeyError, ValueError)):
+            print(f"[PARSE_ERROR] Gemini response malformed — falling back to local cache: {e}")
+        else:
+            print(f"[UNKNOWN] Unexpected Gemini error ({err_type}) — falling back to local cache: {e}")
 
     # ── Layer 4: Local cache ──────────────────────────────────────────────────
     cached = _lookup_local_cache(company_name)
@@ -422,7 +435,6 @@ def analyze(company_name: str, content: str,
             cached["dimensionScores"] = cached["dimension_scores"]
         if "riskLevel" not in cached and "risk_level" in cached:
             cached["riskLevel"] = cached["risk_level"]
-        # Attach real evidence if available, else empty list
         if "evidence" not in cached:
             cached["evidence"] = _normalise_evidence(ev) if ev else []
         return cached

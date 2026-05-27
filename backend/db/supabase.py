@@ -1,18 +1,20 @@
 """
 backend/db/supabase.py
-
-Fixes vs original:
-  Bug 1 — get_cached_company: now also checks analysis_jobs for completed jobs,
-           so repeat queries return cached results instead of spawning new AI jobs.
-  Bug 2 — _cache_to_job: uses cached.get("evidence") OR cached.get("sources")
-           so local_cache.json URL lists are preserved for the evidence panel.
-  Bug 3 — _cache_to_job: analysis_flags now includes severity from cached data.
 """
 
 import os
 import json
 from pathlib import Path
+from datetime import datetime, timezone, timedelta
 from supabase import create_client
+
+# ─── Cache TTL ────────────────────────────────────────────────────────────────
+# Completed jobs are reused as cache hits only if completed within this window.
+# Set CACHE_TTL_HOURS=48 in .env for demo day (covers the full 48h hackathon window).
+# Post-hackathon default can be raised to 168 (1 week) or based on disclosure cycles.
+
+_CACHE_TTL_HOURS = int(os.environ.get("CACHE_TTL_HOURS", "24"))
+
 
 # ─── Local cache (read fallback when Supabase is unavailable) ─────────────────
 
@@ -41,16 +43,9 @@ def _cache_lookup(company_name: str) -> dict | None:
 
 def _cache_to_job(company_name: str, cached: dict) -> dict:
     """
-    Shape a local cache entry into the same structure as a Supabase job record
-    so the frontend normaliser receives a consistent object.
-
-    Fixes:
-      - evidence: falls back to "sources" (URL list) if "evidence" key absent
-      - analysis_flags: now includes severity from cached data
+    Shape a local cache entry into the same structure as a Supabase job record.
     """
     dim = cached.get("dimension_scores") or cached.get("dimensionScores") or {}
-
-    # Bug 2 fix: local_cache.json uses "sources" (list of URL strings) not "evidence"
     evidence = cached.get("evidence") or cached.get("sources") or []
 
     return {
@@ -70,7 +65,6 @@ def _cache_to_job(company_name: str, cached: dict) -> dict:
             {
                 "job_id":      None,
                 "type":        f.get("type"),
-                # Bug 3 fix: preserve severity from cached data
                 "severity":    f.get("severity", "medium"),
                 "description": f.get("description"),
                 "source":      f.get("source", ""),
@@ -87,10 +81,6 @@ def get_client():
 
 
 def create_job(job_id: str, company_name: str):
-    """
-    Write a new job record to Supabase.
-    Failure is logged but not raised — the job still runs in the analysis service.
-    """
     try:
         get_client().table("analysis_jobs").insert({
             "id":           job_id,
@@ -103,10 +93,6 @@ def create_job(job_id: str, company_name: str):
 
 
 def get_job(job_id: str) -> dict | None:
-    """
-    Read a job record from Supabase including its flags.
-    Returns None on DB failure — caller handles the missing job case.
-    """
     try:
         res = (
             get_client()
@@ -126,13 +112,12 @@ def get_cached_company(company_name: str) -> dict | None:
     """
     Look up a previously completed analysis for this company name.
 
-    Fallback chain (Bug 1 fix — three layers instead of two):
-      1. Supabase cached_companies table  (explicit cache entries)
-      2. Supabase analysis_jobs table     (any completed job for this company)
-      3. local_cache.json                 (pre-computed demo companies)
-
-    Layer 2 is the critical addition: without it, every repeat query for a
-    real company created a new AI job because cached_companies was never written.
+    Fallback chain (three layers):
+      1. Supabase cached_companies table  (explicit permanent cache entries)
+      2. Supabase analysis_jobs table     (any completed job within TTL window)
+         — TTL controlled by CACHE_TTL_HOURS env var (default 24h)
+         — Prevents serving stale results while still saving API tokens
+      3. local_cache.json                 (pre-computed demo companies; no TTL)
     """
     db = None
     try:
@@ -156,27 +141,33 @@ def get_cached_company(company_name: str) -> dict | None:
         except Exception as e:
             print(f"cached_companies lookup failed: {e}")
 
-        # ── Layer 2: any completed job for this company name ───────────────
-        # This is the fix for Bug 1: repeat queries reuse the existing result
-        # instead of spawning a new AI analysis job every time.
+        # ── Layer 2: completed jobs within TTL window ──────────────────────
+        # Only reuse results completed within the last CACHE_TTL_HOURS hours.
+        # This balances token saving against information freshness.
         try:
+            cutoff = (
+                datetime.now(timezone.utc) - timedelta(hours=_CACHE_TTL_HOURS)
+            ).isoformat()
+
             res = (
                 db.table("analysis_jobs")
                 .select("id, company_name")
                 .eq("company_name", company_name)
                 .eq("status", "completed")
+                .gte("completed_at", cutoff)
                 .order("completed_at", desc=True)
                 .limit(1)
                 .maybe_single()
                 .execute()
             )
             if res.data:
-                print(f"Cache hit (analysis_jobs completed): {company_name} → {res.data['id']}")
+                print(f"Cache hit (analysis_jobs, TTL={_CACHE_TTL_HOURS}h): "
+                      f"{company_name} → {res.data['id']}")
                 return {"job_id": res.data["id"], "company_name": company_name}
         except Exception as e:
             print(f"analysis_jobs cache lookup failed: {e}")
 
-    # ── Layer 3: local_cache.json (zero-network, pre-computed) ────────────
+    # ── Layer 3: local_cache.json (zero-network, no TTL — always fresh enough) ──
     cached = _cache_lookup(company_name)
     if cached:
         print(f"Cache hit (local_cache.json): {company_name}")
@@ -186,10 +177,6 @@ def get_cached_company(company_name: str) -> dict | None:
 
 
 def get_job_with_local_fallback(job_id: str, company_name: str) -> dict | None:
-    """
-    Called by the route handler when job_id starts with "local:" — i.e. the
-    result came from local_cache.json rather than Supabase.
-    """
     cached = _cache_lookup(company_name)
     if cached:
         return _cache_to_job(company_name, cached)
@@ -197,10 +184,6 @@ def get_job_with_local_fallback(job_id: str, company_name: str) -> dict | None:
 
 
 def get_history() -> list[dict]:
-    """
-    Return recent completed analyses.
-    Returns [] on DB failure — frontend shows an empty history gracefully.
-    """
     try:
         res = (
             get_client()

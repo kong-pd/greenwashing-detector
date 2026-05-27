@@ -80,6 +80,7 @@ async def fetch_news(company_name: str) -> list[dict]:
     Query NewsAPI for ESG-related articles about the company.
     Returns a list of structured evidence objects (weight = None).
     Returns [] on any failure — analysis is never blocked.
+    Max 5 quality items returned (fetch 10, filter down).
     """
     api_key = os.environ.get("NEWS_API_KEY")
     if not api_key:
@@ -143,13 +144,19 @@ async def fetch_news(company_name: str) -> list[dict]:
 def fetch_cdp(company_name: str) -> str:
     """
     CDP data enrichment.
-    Currently a stub — returns a placeholder for the AI prompt.
-    Full implementation: query CDP CSV dataset by company name / ISIN.
+    Currently a stub — returns a no-penalty instruction for the AI prompt.
+
+    The stub string explicitly instructs the AI not to penalise the
+    Data Consistency dimension based on CDP data absence alone, preventing
+    the stub from systematically biasing scores downward.
+
+    Full implementation (post-hackathon): query CDP CSV dataset by
+    company name / ISIN, return structured emissions record.
     """
-    # TODO: load CDP CSV, match by company_name, return structured record
     return (
-        f"CDP data for {company_name}: not yet integrated. "
-        "Refer to cdp.net for verified emissions data."
+        f"CDP verified emissions data for {company_name} is not available in this analysis. "
+        f"Score the Data Consistency dimension based only on the news evidence and scraped "
+        f"content provided above. Do not penalise or adjust the score due to CDP data absence alone."
     )
 
 
@@ -158,8 +165,8 @@ def fetch_cdp(company_name: str) -> str:
 async def enrich(company_name: str) -> tuple[list[dict], str]:
     """
     Returns:
-        evidence_list  — list of structured evidence objects (weight = None)
-        cdp_summary    — string summary of CDP data (or stub message)
+        evidence_list  — list of structured evidence objects (weight = None), max 5 items
+        cdp_summary    — no-penalty stub string (full CDP integration post-hackathon)
     """
     evidence_list = await fetch_news(company_name)
     cdp_summary   = fetch_cdp(company_name)

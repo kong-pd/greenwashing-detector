@@ -1,16 +1,15 @@
 // AnalysisScreen.jsx — US-05, US-06, US-07, FR-04
-// Wiki alignment:
-//   - Company name shows actual query, not hardcoded Petrovera (US-05)
-//   - Scraping failure triggers manual input UI, not silent demo fallback (FR-04/US-04)
-//   - Retry button on timeout (US-07)
-//   - Five pipeline steps with real-time signals (US-05/US-06)
+// Changes vs original:
+//   - scraping_failed split into scraping_blocked / scraping_not_found
+//   - ManualInputFallback receives failReason prop and shows contextual banner
+//   - Both fail reasons trigger manual input (same UX flow, different message)
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { GWD_DATA } from "../data.js";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 const POLL_INTERVAL_MS = 3000;
-const API_TIMEOUT_MS   = 60000;  // US-07: show timeout UI after 60s
+const API_TIMEOUT_MS   = 60000;
 
 // ─── API helpers ───────────────────────────────────────────────────────────
 async function startAnalysis(query, manualContent, signal) {
@@ -74,12 +73,46 @@ function inferSeverity(type) {
   return "low";
 }
 
+// ─── Scraping fail reason helpers ──────────────────────────────────────────
+// Maps backend fail_reason codes to user-facing copy.
+
+const SCRAPING_FAIL_COPY = {
+  scraping_not_found: {
+    title: "ESG page not found",
+    body:  "We searched for {company}'s sustainability page but couldn't find a relevant result. You can paste their ESG content below, or provide the URL directly.",
+  },
+  scraping_blocked: {
+    title: "Access blocked",
+    body:  "We found {company}'s ESG page but couldn't access it — the site may use anti-scraping protection. Please paste the content below to continue.",
+  },
+  // Legacy value — treat same as blocked
+  scraping_failed: {
+    title: "Scraping failed",
+    body:  "We couldn't retrieve {company}'s ESG content automatically. Please paste it below to continue.",
+  },
+};
+
+function getScrapingCopy(failReason, companyName) {
+  const template = SCRAPING_FAIL_COPY[failReason] || SCRAPING_FAIL_COPY.scraping_failed;
+  return {
+    title: template.title,
+    body:  template.body.replace("{company}", companyName),
+  };
+}
+
+function isScrapingFailure(failReason) {
+  return ["scraping_not_found", "scraping_blocked", "scraping_failed"].includes(failReason);
+}
+
 // ─── FR-04 Manual Input Fallback ───────────────────────────────────────────
-// US-04: shown when scraping fails; user pastes content to continue analysis.
-function ManualInputFallback({ companyName, onSubmit, onRetry }) {
+// failReason prop drives the banner text so users get a contextual message.
+
+function ManualInputFallback({ companyName, failReason, onSubmit, onRetry }) {
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
+
+  const copy = getScrapingCopy(failReason, companyName);
 
   function handleSubmit() {
     const content = text.trim();
@@ -88,7 +121,6 @@ function ManualInputFallback({ companyName, onSubmit, onRetry }) {
       return;
     }
     if (file) {
-      // Read file content
       const reader = new FileReader();
       reader.onload = (e) => onSubmit(e.target.result);
       reader.readAsText(file);
@@ -100,15 +132,14 @@ function ManualInputFallback({ companyName, onSubmit, onRetry }) {
   return (
     <div className="fallback-wrap">
       <div className="fallback-card">
-        {/* Status banner */}
+        {/* Contextual banner — different text for not_found vs blocked */}
         <div className="fallback-banner">
           <svg viewBox="0 0 16 16" width="14" height="14" fill="none">
             <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.3"/>
             <path d="M8 5v3.5M8 10v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
           </svg>
           <span>
-            Automatic scraping was blocked for <strong>{companyName}</strong>.
-            Paste the company's ESG content below to continue.
+            <strong>{copy.title} — </strong>{copy.body}
           </span>
         </div>
 
@@ -179,7 +210,6 @@ function ManualInputFallback({ companyName, onSubmit, onRetry }) {
 export function AnalysisScreen({ claim, query, onComplete }) {
   const steps = GWD_DATA.PIPELINE_STEPS;
 
-  // Pipeline animation
   const [stepIdx,        setStepIdx]        = useState(0);
   const [doneSteps,      setDoneSteps]      = useState(new Set());
   const [confidence,     setConfidence]     = useState(0);
@@ -187,25 +217,24 @@ export function AnalysisScreen({ claim, query, onComplete }) {
   const [evidenceFound,  setEvidenceFound]  = useState(0);
   const [contradictions, setContradictions] = useState(0);
 
-  // API state
-  const [apiResult,       setApiResult]       = useState(null);
-  const [apiError,        setApiError]        = useState(null);
-  const [timedOut,        setTimedOut]        = useState(false);
-  const [retryCount,      setRetryCount]      = useState(0);
-  // FR-04: Manual input fallback
-  const [scrapingFailed,  setScrapingFailed]  = useState(false);
-  const [manualContent,   setManualContent]   = useState(null);
+  const [apiResult,      setApiResult]      = useState(null);
+  const [apiError,       setApiError]       = useState(null);
+  const [timedOut,       setTimedOut]       = useState(false);
+  const [retryCount,     setRetryCount]     = useState(0);
+
+  // FR-04: scraping failure state — now tracks the specific fail reason
+  const [scrapingFailReason, setScrapingFailReason] = useState(null); // null = no failure
+  const [manualContent,      setManualContent]      = useState(null);
 
   const finished     = useRef(false);
   const pipelineDone = useRef(false);
   const abortRef     = useRef(null);
 
-  // US-05: Display the actual company being analyzed — not hardcoded Petrovera
   const displayName = query || claim?.company_name || "Company";
 
   // ── 1. Pipeline animation ────────────────────────────────────────────────
   useEffect(() => {
-    if (finished.current || scrapingFailed) return;
+    if (finished.current || scrapingFailReason) return;
     const timings = [900, 1100, 1500, 1700, 1200];
     if (stepIdx >= steps.length) {
       pipelineDone.current = true;
@@ -221,7 +250,7 @@ export function AnalysisScreen({ claim, query, onComplete }) {
       setStepIdx(i => i + 1);
     }, timings[stepIdx] ?? 1200);
     return () => clearTimeout(t);
-  }, [stepIdx, apiResult, apiError, scrapingFailed]);
+  }, [stepIdx, apiResult, apiError, scrapingFailReason]);
 
   // ── 2. Animate counters ──────────────────────────────────────────────────
   useEffect(() => {
@@ -245,7 +274,7 @@ export function AnalysisScreen({ claim, query, onComplete }) {
     abortRef.current = ac;
     setApiError(null);
     setTimedOut(false);
-    setScrapingFailed(false);
+    setScrapingFailReason(null);
 
     const deadline = Date.now() + API_TIMEOUT_MS;
 
@@ -287,11 +316,13 @@ export function AnalysisScreen({ claim, query, onComplete }) {
           }
 
           if (poll.status === "failed") {
-            if (poll.fail_reason === "scraping_failed" && !manualContent) {
-              // FR-04 / US-04: Show manual input fallback — do NOT silently use demo data
-              setScrapingFailed(true);
+            const reason = poll.fail_reason || "scraping_failed";
+
+            if (isScrapingFailure(reason) && !manualContent) {
+              // FR-04: show manual input with contextual message
+              setScrapingFailReason(reason);
             } else {
-              // Other failure — use demo data as last resort
+              // Non-scraping failure or already tried manual — use demo data
               setApiResult(claim);
               if (pipelineDone.current && !finished.current) {
                 finished.current = true;
@@ -339,7 +370,7 @@ export function AnalysisScreen({ claim, query, onComplete }) {
     finished.current     = false;
     pipelineDone.current = false;
     setManualContent(content);
-    setScrapingFailed(false);
+    setScrapingFailReason(null);
     setStepIdx(0);
     setDoneSteps(new Set());
     setRetryCount(n => n + 1);
@@ -349,7 +380,7 @@ export function AnalysisScreen({ claim, query, onComplete }) {
   function handleRetryScrap() {
     finished.current     = false;
     pipelineDone.current = false;
-    setScrapingFailed(false);
+    setScrapingFailReason(null);
     setManualContent(null);
     setStepIdx(0);
     setDoneSteps(new Set());
@@ -358,19 +389,24 @@ export function AnalysisScreen({ claim, query, onComplete }) {
 
   const allDone = stepIdx >= steps.length;
 
-  // ── FR-04: Render manual input fallback ───────────────────────────────────
-  if (scrapingFailed) {
+  // ── FR-04: Render manual input fallback with contextual message ───────────
+  if (scrapingFailReason) {
     return (
       <div className="analysis-screen">
         <div className="ana-context-bar">
           <div className="ana-context-l">
-            <span className="mono small mute">SCRAPING BLOCKED</span>
+            <span className="mono small mute">
+              {scrapingFailReason === "scraping_not_found"
+                ? "ESG PAGE NOT FOUND"
+                : "ACCESS BLOCKED"}
+            </span>
             <span className="ana-context-co">{displayName}</span>
           </div>
           <div className="mono small mute">FR-04 · Manual input mode</div>
         </div>
         <ManualInputFallback
           companyName={displayName}
+          failReason={scrapingFailReason}
           onSubmit={handleManualSubmit}
           onRetry={handleRetryScrap}
         />
@@ -381,7 +417,6 @@ export function AnalysisScreen({ claim, query, onComplete }) {
   // ── Main render ───────────────────────────────────────────────────────────
   return (
     <div className="analysis-screen">
-      {/* US-05: Context bar — shows ACTUAL company being analysed */}
       <div className="ana-context-bar">
         <div className="ana-context-l">
           <span className="mono small mute">ANALYSING</span>
@@ -394,16 +429,11 @@ export function AnalysisScreen({ claim, query, onComplete }) {
       </div>
 
       <div className="ana-stage">
-        {/* Left: claim info — shows query company or demo claim */}
         <aside className="ana-claim">
           <div className="ana-claim-head">
-            <span className="mono small mute">
-              ANALYSING
-            </span>
+            <span className="mono small mute">ANALYSING</span>
           </div>
-          <h2 className="ana-claim-headline">
-            {displayName}
-          </h2>
+          <h2 className="ana-claim-headline">{displayName}</h2>
           {manualContent ? (
             <div className="ana-claim-quote">
               Manual content provided — {manualContent.length} characters
@@ -436,7 +466,6 @@ export function AnalysisScreen({ claim, query, onComplete }) {
           </div>
         </aside>
 
-        {/* Centre: US-05 pipeline steps */}
         <main className="ana-pipeline">
           <div className="ana-title-row">
             <h1 className="ana-title">
@@ -497,7 +526,6 @@ export function AnalysisScreen({ claim, query, onComplete }) {
             </div>
           )}
 
-          {/* US-07: Timeout with retry */}
           {timedOut && (
             <div className="ana-timeout">
               <div className="ana-timeout-msg">
@@ -528,7 +556,6 @@ export function AnalysisScreen({ claim, query, onComplete }) {
           )}
         </main>
 
-        {/* Right: US-06 live signals */}
         <aside className="ana-signals">
           <div className="ana-signal-card">
             <div className="signal-lbl mono small">RISK BUILDING</div>
@@ -587,7 +614,6 @@ export function AnalysisScreen({ claim, query, onComplete }) {
   );
 }
 
-// US-06: Live query log showing what is actually being queried
 function LiveQueries({ stepIdx, companyName }) {
   const name = encodeURIComponent(companyName);
   const QUERIES = [
