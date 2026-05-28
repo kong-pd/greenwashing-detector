@@ -69,7 +69,7 @@ async def scrape(company_name: str) -> tuple[str | None, str | None]:
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 })
                 await page.goto(target_url, timeout=20000, wait_until="domcontentloaded")
-await page.wait_for_timeout(3000)
+                await page.wait_for_timeout(3000)
                 content = await page.inner_text("body")
                 await browser.close()
 
