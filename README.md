@@ -24,7 +24,7 @@ An AI-powered ESG fact-checking engine that cross-references corporate sustainab
 git clone https://github.com/kong-pd/greenwashing-detector.git
 cd greenwashing-detector
 ```
-
+  
 ### 2. Configure environment variables
 
 ```bash
