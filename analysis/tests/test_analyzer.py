@@ -148,21 +148,30 @@ def test_weight_clamp_none_returns_midpoint():
 @pytest.mark.asyncio
 async def test_enricher_returns_list_without_api_key():
     """
-    Enricher returns an empty list when NEWS_API_KEY is not set
+    Enricher returns an empty list when SERPER_API_KEY is not set
     or is a placeholder — does not raise an exception.
     """
-    from enricher import fetch_news
-    result = await fetch_news("Patagonia")
+    from enricher import fetch_news_serper
+    result = await fetch_news_serper("Patagonia")
     assert isinstance(result, list)
     # Empty list is acceptable — enricher fails gracefully
 
 
 @pytest.mark.asyncio
 async def test_enricher_quote_extraction():
-    """Quote extraction helper returns None for empty article."""
+    """
+    Quote extraction helper (_extract_quote) now accepts a string, not a dict.
+    Returns None for None/empty/too-short strings.
+    """
     from enricher import _extract_quote
-    assert _extract_quote({}) is None
-    assert _extract_quote({"title": "Hi", "description": None, "content": None}) is None
+    # None and empty string → None
+    assert _extract_quote(None) is None
+    assert _extract_quote("") is None
+    # String shorter than MIN_LEN (20 chars) → None
+    assert _extract_quote("Hi") is None
+    # String of 20+ chars → returned (truncated to 300)
+    long_str = "This is long enough to pass the minimum length requirement."
+    assert _extract_quote(long_str) is not None
 
 
 @pytest.mark.asyncio
