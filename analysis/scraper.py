@@ -65,8 +65,10 @@ async def scrape(company_name: str) -> tuple[str | None, str | None]:
             page = await browser.new_page()
 
             try:
-                await page.goto(target_url, timeout=20000)
-                await page.wait_for_timeout(2000)
+                await page.set_extra_http_headers({
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                })
+                await page.goto(target_url, timeout=20000, wait_until="networkidle")
                 content = await page.inner_text("body")
                 await browser.close()
 
@@ -75,7 +77,7 @@ async def scrape(company_name: str) -> tuple[str | None, str | None]:
                     return None, "scraping_not_found"
 
                 print(f"Scraper: success for '{company_name}' ({len(content)} chars)")
-                return content[:3000], None
+                return content[:8000], None
 
             except Exception as page_err:
                 await browser.close()
