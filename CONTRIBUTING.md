@@ -32,9 +32,13 @@ git push origin feat/your-feature-name
 
 # 6. Wait for CI to pass (3 green checks) → teammate Approves → Merge
 
-# 7. Sync your local main after merge
+# 7. Delete the branch — GitHub shows a "Delete branch" button after merge,
+#    click it. Your commits are preserved in main, nothing is lost.
+
+# 8. Sync your local main and clean up the local branch
 git checkout main
 git pull origin main
+git branch -d feat/your-feature-name
 ```
 
 ---
@@ -87,6 +91,37 @@ test: update enricher tests for Serper/Guardian API
 **Before merging:**
 - All 3 CI checks green ✅
 - At least 1 teammate Approval ✅
+
+### If your PR gets rejected
+
+The reviewer will select **Request changes** and leave a comment explaining why.
+Your PR status changes to ❌ Changes requested.
+
+No need to close and reopen — just fix it on the same branch:
+
+```bash
+git checkout feat/your-feature-name
+# make your fixes
+git add .
+git commit -m "fix: address review comments"
+git push origin feat/your-feature-name
+```
+
+The PR updates automatically. The reviewer will be notified to re-review.
+
+### After merging — always delete the branch
+
+GitHub shows a **Delete branch** button immediately after merge — click it.
+Then clean up locally:
+
+```bash
+git checkout main
+git pull origin main
+git branch -d feat/your-feature-name
+```
+
+Your commits are preserved in main. Deleting the branch keeps the repo clean
+and prevents accidentally continuing work on a stale branch.
 
 ---
 
