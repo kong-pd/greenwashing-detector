@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://YOUR_RAILWAY_BACKEND_URL/api/$1"
+      "destination": "https://greenwashing-detector-production.up.railway.app/api/$1"
     }
   ],
   "headers": [
