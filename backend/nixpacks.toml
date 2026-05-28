@@ -1,0 +1,10 @@
+[phases.setup]
+nixPkgs = ["python311"]
+
+aptPkgs = [
+  "libpango-1.0-0",
+  "libpangocairo-1.0-0",
+  "libcairo2",
+  "libgdk-pixbuf2.0-0",
+  "shared-mime-info"
+]
