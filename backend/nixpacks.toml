@@ -1,6 +1,4 @@
 [phases.setup]
-nixPkgs = ["python311"]
-
 aptPkgs = [
   "libpango-1.0-0",
   "libpangocairo-1.0-0",
