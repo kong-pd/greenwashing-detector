@@ -1,10 +1,12 @@
 """
 analysis/main.py — GreenCheck Analysis Service (port 8001)
 """
-
+import asyncio
+import sys
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 from fastapi import FastAPI
 from pydantic import BaseModel
-import asyncio
 from dotenv import load_dotenv
 from scraper import scrape
 from enricher import enrich

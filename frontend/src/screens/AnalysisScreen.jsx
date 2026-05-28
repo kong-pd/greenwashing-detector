@@ -34,35 +34,51 @@ async function pollReport(jobId, signal) {
 }
 
 // ─── Response normaliser ───────────────────────────────────────────────────
+// FR-37: Never spread demoClaim as defaults — demoClaim is a generic blank
+//        template (makeLiveClaim) or a Petrovera fixture. Spreading it would
+//        leak Petrovera flags/evidence into real company reports when the API
+//        returns incomplete data. All fields must come from raw or be empty/0.
 function normalise(raw, demoClaim) {
   if (!raw || raw.error) return null;
+
   const dim = raw.dimensionScores || raw.dimension_scores || {};
+
   const flags = (raw.flags || []).map(f => ({
     type:        f.type        || "Finding",
     severity:    f.severity    || inferSeverity(f.type),
     description: f.description || "",
     source:      f.source      || "",
   }));
+
   return {
-    ...demoClaim,
-    id:           raw.id        || raw.job_id || demoClaim.id,
-    score:        raw.score     ?? demoClaim.score,
-    riskLevel:    raw.riskLevel || raw.risk_level || demoClaim.riskLevel,
-    risk_level:   raw.risk_level || raw.riskLevel || demoClaim.risk_level,
-    summary:      raw.summary   || demoClaim.summary,
-    confidence:   raw.confidence ?? demoClaim.confidence,
+    // identity — prefer API values, fall back to demoClaim only for display metadata
+    id:           raw.id          || raw.job_id      || demoClaim.id,
+    headline:     raw.headline    || raw.company_name || demoClaim.headline,
     company_name: raw.company_name || demoClaim.company_name,
-    headline:     raw.headline || raw.company_name || demoClaim.headline,
-    analyzedAt:   raw.analyzedAt || raw.completed_at || demoClaim.analyzedAt,
+    shortQuote:   demoClaim.shortQuote || "",
+    source:       raw.source      || demoClaim.source,
+    sourceType:   raw.sourceType  || demoClaim.sourceType || "AI Analysis",
+    capturedAt:   demoClaim.capturedAt,
+    analyzedAt:   raw.analyzedAt  || raw.completed_at || demoClaim.analyzedAt,
+
+    // scoring — only from API; no Petrovera fallback
+    score:      raw.score      ?? 0,
+    riskLevel:  raw.riskLevel  || raw.risk_level || "—",
+    risk_level: raw.risk_level || raw.riskLevel  || "—",
+    summary:    raw.summary    || "",
+    confidence: raw.confidence ?? 0.85,
+
     dimensionScores: {
-      specificity:               dim.specificity               ?? demoClaim.dimensionScores.specificity,
-      data_consistency:          dim.data_consistency          ?? demoClaim.dimensionScores.data_consistency,
-      third_party_certification: dim.third_party_certification ?? demoClaim.dimensionScores.third_party_certification,
-      negative_news:             dim.negative_news             ?? demoClaim.dimensionScores.negative_news,
-      greenwashing_language:     dim.greenwashing_language     ?? demoClaim.dimensionScores.greenwashing_language,
+      specificity:               dim.specificity               ?? 0,
+      data_consistency:          dim.data_consistency          ?? 0,
+      third_party_certification: dim.third_party_certification ?? 0,
+      negative_news:             dim.negative_news             ?? 0,
+      greenwashing_language:     dim.greenwashing_language     ?? 0,
     },
-    flags:    flags.length > 0 ? flags : demoClaim.flags,
-    evidence: raw.evidence?.length > 0 ? raw.evidence : demoClaim.evidence,
+
+    // flags & evidence — API only; empty if API returns nothing
+    flags:    flags,
+    evidence: raw.evidence || [],
   };
 }
 

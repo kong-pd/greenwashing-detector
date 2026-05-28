@@ -1,158 +1,171 @@
 import httpx
 import os
+import re
+from datetime import datetime, timedelta
 
-# ─── Outlet classification ────────────────────────────────────────────────────
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 
-MAJOR_OUTLETS = {
-    "reuters", "financial times", "bloomberg", "the guardian",
-    "bbc news", "the new york times", "the washington post",
-    "associated press", "wall street journal", "ft", "bloomberg businessweek",
-    "the economist", "le monde", "der spiegel", "nikkei",
-}
-
-def _is_major_outlet(outlet_name: str) -> bool:
-    return outlet_name.strip().lower() in MAJOR_OUTLETS
-
-
-# ─── Quote extraction ─────────────────────────────────────────────────────────
-
-def _extract_quote(article: dict) -> str | None:
-    """
-    Extract the best available quote from a NewsAPI article.
-    Priority: description → content excerpt → title.
-    Returns None if nothing meets the minimum length.
-    """
+def _extract_quote(text: str | None) -> str | None:
     MIN_LEN = 20
     MAX_LEN = 300
-
-    candidates = [
-        article.get("description") or "",
-        (article.get("content") or "")[:MAX_LEN],
-        article.get("title") or "",
-    ]
-
-    for candidate in candidates:
-        candidate = candidate.strip()
-        # NewsAPI appends "[+N chars]" to truncated content — strip it
-        if "[+" in candidate:
-            candidate = candidate[:candidate.index("[+")].strip()
-        if len(candidate) >= MIN_LEN:
-            return candidate[:MAX_LEN]
-
+    if not text:
+        return None
+    text = text.strip()
+    if "[+" in text:
+        text = text[:text.index("[+")].strip()
+    if len(text) >= MIN_LEN:
+        return text[:MAX_LEN]
     return None
 
 
-# ─── Evidence assembly ────────────────────────────────────────────────────────
-
-def _build_evidence_item(idx: int, article: dict) -> dict | None:
-    """
-    Convert a single NewsAPI article into a structured evidence object.
-    Returns None if the article does not meet quality thresholds.
-    """
-    quote = _extract_quote(article)
-    if not quote:
-        return None
-
-    url = article.get("url") or ""
-    if not url or url == "https://removed.com":
-        return None
-
-    org = (article.get("source") or {}).get("name") or "Unknown"
-    date_raw = article.get("publishedAt") or ""
-    date = date_raw[:10] if date_raw else "Unknown"
-
-    return {
-        "id":     f"E-{str(idx + 1).zfill(2)}",
-        "kind":   "News",
-        "title":  (article.get("title") or "").strip(),
-        "org":    org,
-        "date":   date,
-        "url":    url,
-        "quote":  quote,
-        "weight": None,   # assigned by AI in analyzer.py
-    }
+def _normalise_serper_date(date_str: str) -> str:
+    """Serper 返回相对日期如 '2 days ago'，转为 YYYY-MM-DD。"""
+    if not date_str:
+        return "Unknown"
+    now = datetime.now()
+    # 尝试解析 "Mar 12, 2024" 格式
+    for fmt in ("%b %d, %Y", "%B %d, %Y"):
+        try:
+            return datetime.strptime(date_str, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    d = date_str.lower()
+    if "hour" in d or "minute" in d or "just now" in d:
+        return now.strftime("%Y-%m-%d")
+    m = re.search(r"(\d+)\s*day", d)
+    if m:
+        return (now - timedelta(days=int(m.group(1)))).strftime("%Y-%m-%d")
+    m = re.search(r"(\d+)\s*week", d)
+    if m:
+        return (now - timedelta(weeks=int(m.group(1)))).strftime("%Y-%m-%d")
+    m = re.search(r"(\d+)\s*month", d)
+    if m:
+        return (now - timedelta(days=int(m.group(1)) * 30)).strftime("%Y-%m-%d")
+    return now.strftime("%Y-%m-%d")
 
 
-# ─── NewsAPI fetch ────────────────────────────────────────────────────────────
+def _reindex(items: list[dict]) -> list[dict]:
+    """合并来源后统一重新编号 E-01, E-02..."""
+    for i, item in enumerate(items):
+        item["id"] = f"E-{str(i + 1).zfill(2)}"
+    return items
 
-async def fetch_news(company_name: str) -> list[dict]:
-    """
-    Query NewsAPI for ESG-related articles about the company.
-    Returns a list of structured evidence objects (weight = None).
-    Returns [] on any failure — analysis is never blocked.
-    Max 5 quality items returned (fetch 10, filter down).
-    """
-    api_key = os.environ.get("NEWS_API_KEY")
+
+# ─── Serper News（主要来源）──────────────────────────────────────────────────
+
+async def fetch_news_serper(company_name: str) -> list[dict]:
+    api_key = os.environ.get("SERPER_API_KEY")
     if not api_key:
-        print("NewsAPI: no API key configured")
+        print("Serper: no API key configured")
         return []
 
-    params = {
-        "q":        f"{company_name} greenwashing OR sustainability OR ESG",
-        "language": "en",
-        "sortBy":   "relevancy",
-        "pageSize": 10,   # fetch 10, filter down to max 5 quality items
-        "apiKey":   api_key,
-    }
-
-    async def _fetch() -> list[dict]:
+    try:
         async with httpx.AsyncClient() as client:
-            res = await client.get(
-                "https://newsapi.org/v2/everything",
-                params=params,
+            res = await client.post(
+                "https://google.serper.dev/news",
+                headers={
+                    "X-API-KEY":    api_key,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "q":   f"{company_name} greenwashing OR sustainability OR ESG",
+                    "num": 10,
+                    "hl":  "en",
+                },
                 timeout=10,
             )
             res.raise_for_status()
-            return res.json().get("articles") or []
-
-    # First attempt
-    try:
-        articles = await _fetch()
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 429:
-            # Rate limit — wait 1 second and retry once
-            import asyncio
-            print("NewsAPI: rate limited, retrying in 1s")
-            await asyncio.sleep(1)
-            try:
-                articles = await _fetch()
-            except Exception as retry_err:
-                print(f"NewsAPI: retry failed — {retry_err}")
-                return []
-        else:
-            print(f"NewsAPI: HTTP error {e.response.status_code}")
-            return []
+            articles = res.json().get("news", [])
     except Exception as e:
-        print(f"NewsAPI: request failed — {e}")
+        print(f"Serper: request failed — {e}")
         return []
 
-    # Build evidence objects, skipping low-quality items
     evidence = []
     for article in articles:
-        if len(evidence) >= 5:   # cap at 5 evidence items
+        if len(evidence) >= 5:
             break
-        item = _build_evidence_item(len(evidence), article)
-        if item:
-            evidence.append(item)
+        url = article.get("link", "")
+        if not url or "removed.com" in url:
+            continue
+        quote = _extract_quote(article.get("snippet")) or _extract_quote(article.get("title"))
+        if not quote:
+            continue
+        evidence.append({
+            "id":     f"E-{str(len(evidence) + 1).zfill(2)}",
+            "kind":   "News",
+            "title":  (article.get("title") or "").strip(),
+            "org":    article.get("source", "Unknown"),
+            "date":   _normalise_serper_date(article.get("date", "")),
+            "url":    url,
+            "quote":  quote,
+            "weight": None,
+        })
 
-    print(f"NewsAPI: {len(evidence)} evidence items assembled for '{company_name}'")
+    print(f"Serper: {len(evidence)} evidence items for '{company_name}'")
     return evidence
 
 
-# ─── CDP data ─────────────────────────────────────────────────────────────────
+# ─── Guardian News（备用补充）────────────────────────────────────────────────
+
+async def fetch_news_guardian(company_name: str, max_items: int = 3) -> list[dict]:
+    api_key = os.environ.get("GUARDIAN_API_KEY")
+    if not api_key:
+        print("Guardian: no API key configured")
+        return []
+
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.get(
+                "https://content.guardianapis.com/search",
+                params={
+                    "q":           f"{company_name} greenwashing sustainability ESG",
+                    "api-key":     api_key,
+                    "show-fields": "trailText,bodyText",
+                    "page-size":   max_items + 3,  # 多取几条备用过滤
+                    "order-by":    "relevance",
+                },
+                timeout=10,
+            )
+            res.raise_for_status()
+            results = res.json().get("response", {}).get("results", [])
+    except Exception as e:
+        print(f"Guardian: request failed — {e}")
+        return []
+
+    evidence = []
+    for article in results:
+        if len(evidence) >= max_items:
+            break
+        url = article.get("webUrl", "")
+        if not url:
+            continue
+        fields = article.get("fields", {})
+        quote = (
+            _extract_quote(fields.get("trailText")) or
+            _extract_quote((fields.get("bodyText") or "")[:300]) or
+            _extract_quote(article.get("webTitle"))
+        )
+        if not quote:
+            continue
+        date_raw = article.get("webPublicationDate", "")
+        evidence.append({
+            "id":     f"E-{str(len(evidence) + 1).zfill(2)}",
+            "kind":   "News",
+            "title":  (article.get("webTitle") or "").strip(),
+            "org":    "The Guardian",
+            "date":   date_raw[:10] if date_raw else "Unknown",
+            "url":    url,
+            "quote":  quote,
+            "weight": None,
+        })
+
+    print(f"Guardian: {len(evidence)} evidence items for '{company_name}'")
+    return evidence
+
+
+# ─── CDP data（stub）─────────────────────────────────────────────────────────
 
 def fetch_cdp(company_name: str) -> str:
-    """
-    CDP data enrichment.
-    Currently a stub — returns a no-penalty instruction for the AI prompt.
-
-    The stub string explicitly instructs the AI not to penalise the
-    Data Consistency dimension based on CDP data absence alone, preventing
-    the stub from systematically biasing scores downward.
-
-    Full implementation (post-hackathon): query CDP CSV dataset by
-    company name / ISIN, return structured emissions record.
-    """
     return (
         f"CDP verified emissions data for {company_name} is not available in this analysis. "
         f"Score the Data Consistency dimension based only on the news evidence and scraped "
@@ -164,10 +177,23 @@ def fetch_cdp(company_name: str) -> str:
 
 async def enrich(company_name: str) -> tuple[list[dict], str]:
     """
-    Returns:
-        evidence_list  — list of structured evidence objects (weight = None), max 5 items
-        cdp_summary    — no-penalty stub string (full CDP integration post-hackathon)
+    证据组装 pipeline：
+      1. Serper（Google News）— 主要来源，历史覆盖更好
+      2. Guardian              — Serper 不足 3 条时自动补充
+    最终返回不超过 5 条，ID 统一重新编号。
     """
-    evidence_list = await fetch_news(company_name)
-    cdp_summary   = fetch_cdp(company_name)
-    return evidence_list, cdp_summary
+    # Step 1: Serper 主查询
+    evidence = await fetch_news_serper(company_name)
+
+    # Step 2: Guardian 补充（Serper 结果不足时）
+    if len(evidence) < 3:
+        needed = 5 - len(evidence)
+        print(f"Serper returned {len(evidence)} — supplementing with Guardian (need {needed})")
+        guardian_items = await fetch_news_guardian(company_name, max_items=needed)
+        evidence = evidence + guardian_items
+
+    # 合并去重、上限5条、重新编号
+    evidence = _reindex(evidence[:5])
+
+    print(f"enrich: total {len(evidence)} evidence items for '{company_name}'")
+    return evidence, fetch_cdp(company_name)

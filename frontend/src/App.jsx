@@ -92,10 +92,10 @@ const DEMO_COMPANIES = ["shell", "h&m", "patagonia", "tesla", "bp"];
 
 // Build a minimal "live analysis" claim template for external company searches.
 // AnalysisScreen fetches real data and overwrites every field.
+// FR-37: Do NOT spread GWD_DATA.CLAIMS[0] — that would leak Petrovera demo data
+//        into real company reports when the API returns incomplete results.
 function makeLiveClaim(companyName) {
-  const base = GWD_DATA.CLAIMS[0]; // structural template only
   return {
-    ...base,
     id:             "LIVE",
     headline:       companyName,
     shortQuote:     `Analysing ${companyName}'s sustainability claims…`,
@@ -111,7 +111,13 @@ function makeLiveClaim(companyName) {
     confidence:     0.85,
     flags:          [],
     evidence:       [],
-    dimensionScores: { specificity: 0, data_consistency: 0, third_party_certification: 0, negative_news: 0, greenwashing_language: 0 },
+    dimensionScores: {
+      specificity:               0,
+      data_consistency:          0,
+      third_party_certification: 0,
+      negative_news:             0,
+      greenwashing_language:     0,
+    },
   };
 }
 
