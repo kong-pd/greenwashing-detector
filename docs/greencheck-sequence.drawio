@@ -19,10 +19,10 @@
         <mxCell id="h-as" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eeff;strokeColor=#9673a6;fontSize=12;arcSize=8;" value="&lt;b&gt;analysis-service&lt;/b&gt;&lt;br&gt;&lt;font style=&#39;font-size:9px&#39; color=&#39;#6a3a9a&#39;&gt;:8001&lt;/font&gt;" vertex="1">
           <mxGeometry height="44" width="120" x="510" y="60" as="geometry" />
         </mxCell>
-        <mxCell id="h-news" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontSize=12;arcSize=8;" value="&lt;b&gt;NewsAPI&lt;/b&gt;" vertex="1">
+        <mxCell id="h-news" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontSize=12;arcSize=8;" value="&lt;b&gt;Serper + Guardian&lt;/b&gt;" vertex="1">
           <mxGeometry height="44" width="120" x="670" y="60" as="geometry" />
         </mxCell>
-        <mxCell id="h-ai" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontSize=12;arcSize=8;" value="&lt;b&gt;Claude / Gemini&lt;/b&gt;" vertex="1">
+        <mxCell id="h-ai" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontSize=12;arcSize=8;" value="&lt;b&gt;Gemini / Groq / Claude&lt;/b&gt;" vertex="1">
           <mxGeometry height="44" width="120" x="830" y="60" as="geometry" />
         </mxCell>
         <mxCell id="h-db" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;arcSize=8;" value="&lt;b&gt;Supabase&lt;/b&gt;" vertex="1">
@@ -136,10 +136,10 @@
             <mxPoint x="570" y="280" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="note1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eeff;strokeColor=#9673a6;fontSize=10;align=left;spacingLeft=8;" value="Scraper: Playwright scrapes ESG page via Google" vertex="1">
+        <mxCell id="note1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eeff;strokeColor=#9673a6;fontSize=10;align=left;spacingLeft=8;" value="Scraper: Serper API finds ESG URL → Playwright fetches content" vertex="1">
           <mxGeometry height="26" width="310" x="580" y="300" as="geometry" />
         </mxCell>
-        <mxCell id="note2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f9f9f9;strokeColor=#cccccc;fontSize=10;align=left;spacingLeft=8;dashed=1;strokeDasharray=4 3;" value="if blocked → prompt user for manual input" vertex="1">
+        <mxCell id="note2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f9f9f9;strokeColor=#cccccc;fontSize=10;align=left;spacingLeft=8;dashed=1;strokeDasharray=4 3;" value="if blocked/not found → status=failed · frontend shows manual paste/PDF UI" vertex="1">
           <mxGeometry height="26" width="310" x="580" y="334" as="geometry" />
         </mxCell>
         <mxCell id="a6" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;strokeColor=#d6b656;strokeWidth=2;fontSize=10;align=center;labelBackgroundColor=#ffffff;" value="search ESG articles">
@@ -154,7 +154,7 @@
             <mxPoint x="570" y="400" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="a8" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;strokeColor=#d6b656;strokeWidth=2;fontSize=10;align=center;labelBackgroundColor=#ffffff;" value="content + evidence  →  score  (① Claude · ② Gemini fallback)">
+        <mxCell id="a8" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;strokeColor=#d6b656;strokeWidth=2;fontSize=10;align=center;labelBackgroundColor=#ffffff;" value="content + evidence → score  (① Gemini · ② Groq · ③ Claude paid)">
           <mxGeometry relative="1" as="geometry">
             <mxPoint x="570" y="430" as="sourcePoint" />
             <mxPoint x="890" y="430" as="targetPoint" />
@@ -166,7 +166,7 @@
             <mxPoint x="570" y="450" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="note3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;spacingLeft=8;strokeDasharray=4 3;" value="③ if both AIs unavailable → local_cache.json (no network needed)" vertex="1">
+        <mxCell id="note3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;spacingLeft=8;strokeDasharray=4 3;" value="④ if all AIs fail → local_cache.json (zero-network, instant)" vertex="1">
           <mxGeometry height="26" width="380" x="580" y="468" as="geometry" />
         </mxCell>
         <mxCell id="a10" edge="1" parent="1" style="endArrow=block;endFill=1;html=1;strokeColor=#82b366;strokeWidth=2;fontSize=10;align=center;labelBackgroundColor=#ffffff;" value="save result  (score · flags · evidence)">
@@ -211,10 +211,10 @@
         <mxCell id="f-as" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eeff;strokeColor=#9673a6;fontSize=12;arcSize=8;" value="&lt;b&gt;analysis-service&lt;/b&gt;" vertex="1">
           <mxGeometry height="40" width="120" x="510" y="750" as="geometry" />
         </mxCell>
-        <mxCell id="f-news" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontSize=12;arcSize=8;" value="&lt;b&gt;NewsAPI&lt;/b&gt;" vertex="1">
+        <mxCell id="f-news" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontSize=12;arcSize=8;" value="&lt;b&gt;Serper + Guardian&lt;/b&gt;" vertex="1">
           <mxGeometry height="40" width="120" x="670" y="750" as="geometry" />
         </mxCell>
-        <mxCell id="f-ai" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontSize=12;arcSize=8;" value="&lt;b&gt;Claude / Gemini&lt;/b&gt;" vertex="1">
+        <mxCell id="f-ai" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;fontSize=12;arcSize=8;" value="&lt;b&gt;Gemini / Groq / Claude&lt;/b&gt;" vertex="1">
           <mxGeometry height="40" width="120" x="830" y="750" as="geometry" />
         </mxCell>
         <mxCell id="f-db" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;arcSize=8;" value="&lt;b&gt;Supabase&lt;/b&gt;" vertex="1">
