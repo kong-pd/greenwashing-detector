@@ -760,49 +760,100 @@ function WatchlistScreen({ onAnalyze }) {
 }
 
 // ─────────────────────────────────────────────── Reports screen
+// FR-29: ReportsScreen now calls GET /api/history for real data.
+// Falls back to empty state (not Petrovera demo data) if API is unavailable.
 function ReportsScreen({ onOpenReport }) {
-  const claims = GWD_DATA.CLAIMS;
+  const [reports,  setReports]  = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [apiError, setApiError] = useState(false);
+
+  useEffect(() => {
+    async function fetchHistory() {
+      try {
+        const res  = await fetch("/api/history");
+        const data = await res.json();
+        setReports(data.results || []);
+      } catch (e) {
+        console.warn("History API unavailable:", e);
+        setApiError(true);
+        setReports([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchHistory();
+  }, []);
+
   return (
     <div className="screen reports-screen">
       <header className="wl-head">
         <div>
           <div className="co-card-kicker mono small">SAVED REPORTS</div>
           <h1 className="co-head-title">Analysis History</h1>
-          <p className="co-head-blurb">{claims.length} reports · Petrovera Global plc · FY 2024</p>
+          <p className="co-head-blurb">
+            {loading
+              ? "Loading…"
+              : apiError
+              ? "API unavailable · showing empty history"
+              : `${reports.length} completed ${reports.length === 1 ? "analysis" : "analyses"}`}
+          </p>
         </div>
         <button className="rep-action" onClick={() => gwdToast("Bulk export queued", { kind: "ok" })}>
           Export all ↓
         </button>
       </header>
-      <ul className="rpts-list">
-        {claims.map(cl => {
-          const band = riskBand(cl.score);
-          return (
-            <li key={cl.id} className="rpts-row" onClick={() => onOpenReport(cl)}>
-              <div className="rpts-l">
-                <div className="rpts-meta mono small mute">{cl.id} · {cl.analyzedAt}</div>
-                <div className="rpts-title">{cl.headline}</div>
-                <div className="rpts-src mono small mute">{cl.source} · {cl.sourceType}</div>
-              </div>
-              <div className="rpts-r">
-                <div className="rpts-score mono" style={{
-                  color: band.tone === "bad" ? "var(--c-bad)" : band.tone === "warn" ? "var(--c-warn)" : "var(--c-ok)",
-                }}>
-                  {cl.score}
+
+      {loading ? (
+        <div className="mono small mute" style={{ padding: "48px 4px" }}>
+          Loading history<span className="dots"><span/><span/><span/></span>
+        </div>
+      ) : reports.length === 0 ? (
+        <div className="mono small mute" style={{ padding: "48px 4px" }}>
+          No analyses yet — search a company to get started.
+        </div>
+      ) : (
+        <ul className="rpts-list">
+          {reports.map(r => {
+            const band = riskBand(r.score ?? 0);
+            return (
+              <li key={r.job_id} className="rpts-row" onClick={() => onOpenReport(r)}>
+                <div className="rpts-l">
+                  <div className="rpts-meta mono small mute">
+                    {r.job_id} · {(r.completed_at || "").slice(0, 10)}
+                  </div>
+                  <div className="rpts-title">{r.company_name}</div>
+                  <div className="rpts-src mono small mute">
+                    GreenCheck live analysis · AI Analysis
+                  </div>
                 </div>
-                <div className="rpts-band small mute">{cl.riskLevel}</div>
-              </div>
-              <div className="rpts-actions">
-                <button className="rep-action small" onClick={e => { e.stopPropagation(); onOpenReport(cl); }}>Open →</button>
-                <button className="rep-action small ghost" onClick={e => {
-                  e.stopPropagation();
-                  gwdToast(`${cl.id}_report.pdf queued`, { kind: "ok", icon: "↓" });
-                }}>PDF ↓</button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+                <div className="rpts-r">
+                  <div className="rpts-score mono" style={{
+                    color: band.tone === "bad"  ? "var(--c-bad)"
+                         : band.tone === "warn" ? "var(--c-warn)"
+                         :                        "var(--c-ok)",
+                  }}>
+                    {r.score ?? "—"}
+                  </div>
+                  <div className="rpts-band small mute">{r.risk_level}</div>
+                </div>
+                <div className="rpts-actions">
+                  <button className="rep-action small"
+                    onClick={e => { e.stopPropagation(); onOpenReport(r); }}>
+                    Open →
+                  </button>
+                  <button className="rep-action small ghost"
+                    onClick={e => {
+                      e.stopPropagation();
+                      gwdToast(`${r.job_id}_report.pdf queued`, { kind: "ok", icon: "↓" });
+                    }}>
+                    PDF ↓
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
