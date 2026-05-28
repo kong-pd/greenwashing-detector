@@ -22,14 +22,19 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Syntax check scraper
+        run: python -m py_compile analysis/scraper.py analysis/enricher.py analysis/analyzer.py
+
       - name: Run backend tests
         env:
           USE_MOCK: "true"
           SUPABASE_URL: "https://placeholder.supabase.co"
           SUPABASE_ANON_KEY: "placeholder"
-          ANTHROPIC_API_KEY: "placeholder"
           GEMINI_API_KEY: "placeholder"
-          NEWS_API_KEY: "placeholder"
+          GROQ_API_KEY: "placeholder"
+          SERPER_API_KEY: "placeholder"
+          GUARDIAN_API_KEY: "placeholder"
+          ANTHROPIC_API_KEY: "placeholder"
           ANALYSIS_SERVICE_URL: "http://localhost:8001"
         run: pytest backend/tests/ -v
 
@@ -48,10 +53,15 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Syntax check scraper
+        run: python -m py_compile analysis/scraper.py analysis/enricher.py analysis/analyzer.py
+
       - name: Run analysis tests
         env:
           USE_MOCK: "true"
-          ANTHROPIC_API_KEY: "placeholder"
           GEMINI_API_KEY: "placeholder"
-          NEWS_API_KEY: "placeholder"
+          GROQ_API_KEY: "placeholder"
+          SERPER_API_KEY: "placeholder"
+          GUARDIAN_API_KEY: "placeholder"
+          ANTHROPIC_API_KEY: "placeholder"
         run: pytest analysis/tests/ -v
