@@ -1,5 +1,6 @@
 import anthropic
 import google.generativeai as genai
+import httpx
 import json
 import os
 from pathlib import Path
@@ -388,20 +389,90 @@ def _try_gemini_chain(company_name, content, ev, cdp) -> dict | None:
     return None
 
 
+# ─── Groq caller ──────────────────────────────────────────────────────────────
+# Groq is OpenAI-compatible — we call it via raw HTTP to avoid adding
+# the openai package as a dependency. Uses Llama 3.3 70B as primary
+# (best quality on Groq) with Llama 3.1 8B as a lighter backup.
+# Free tier: 1,000 req/day, 30 RPM — completely independent from Google.
+
+GROQ_MODELS = [
+    ("llama-3.3-70b-versatile", "groq-primary"),
+    ("llama-3.1-8b-instant",    "groq-backup"),
+]
+
+def analyze_with_groq(company_name, content, evidence_list, cdp,
+                      model_name: str = "llama-3.3-70b-versatile") -> dict:
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key or api_key.startswith("your_"):
+        raise ValueError("GROQ_API_KEY not configured")
+
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user",   "content": build_user_prompt(
+                company_name, content, evidence_list, cdp)},
+        ],
+        "temperature": 0.2,
+        "max_tokens":  2000,
+    }
+    response = httpx.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type":  "application/json",
+        },
+        json=payload,
+        timeout=30,
+    )
+    response.raise_for_status()
+    text = response.json()["choices"][0]["message"]["content"]
+    return _parse_json(text)
+
+
+def _try_groq_chain(company_name, content, ev, cdp) -> dict | None:
+    """Try Groq models in order. Returns None if key not set or all models fail."""
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    if not groq_key or groq_key.startswith("your_"):
+        print("Groq skipped — GROQ_API_KEY not configured")
+        return None
+
+    for model_name, label in GROQ_MODELS:
+        try:
+            raw    = analyze_with_groq(company_name, content, ev, cdp, model_name)
+            result = _process_result(raw, ev)
+            print(f"Groq {label} ({model_name}): success")
+            return result
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                print(f"[TRANSIENT] Groq {label} rate limited — trying next model")
+            else:
+                print(f"[TRANSIENT] Groq {label} HTTP {e.response.status_code} — trying next model")
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            print(f"[PARSE_ERROR] Groq {label} bad JSON — trying next model: {e}")
+        except Exception as e:
+            print(f"[UNKNOWN] Groq {label} failed ({type(e).__name__}) — trying next: {e}")
+
+    print("All Groq models exhausted")
+    return None
+
+
 # ─── Main entry point ─────────────────────────────────────────────────────────
 
 def analyze(company_name: str, content: str,
             evidence_list: list[dict] | None = None,
             cdp: str = "No data") -> dict | None:
     """
-    Fallback chain (Gemini-first, Claude optional, cost-conscious):
+    Fallback chain (Gemini-first, Groq independent backup, Claude optional):
       1. Mock mode              (USE_MOCK=true)
       2. Gemini Flash-Lite      (primary   — 1,000 req/day free)
       3. Gemini Flash           (backup-1  —   250 req/day free)
       4. Gemini Pro             (backup-2  —   100 req/day free, best quality)
-      5. Claude Sonnet          (optional paid fallback — only if ANTHROPIC_API_KEY set)
-      6. Local cache            (zero-network, demo companies)
-      7. Generic mock           (absolute last resort)
+      5. Groq Llama 3.3 70B    (backup-3  — 1,000 req/day free, independent provider)
+      6. Groq Llama 3.1 8B     (backup-4  — lighter Groq model)
+      7. Claude Sonnet          (optional paid fallback)
+      8. Local cache            (zero-network, demo companies)
+      9. Generic mock           (absolute last resort)
     """
     ev = evidence_list or []
 
@@ -415,8 +486,12 @@ def analyze(company_name: str, content: str,
     if result:
         return result
 
-    # ── Layer 5: Claude (optional paid fallback) ──────────────────────────────
-    # Only attempted if ANTHROPIC_API_KEY is configured to a real value.
+    # ── Layers 5–6: Groq chain (independent provider, all free) ──────────────
+    result = _try_groq_chain(company_name, content, ev, cdp)
+    if result:
+        return result
+
+    # ── Layer 7: Claude (optional paid fallback) ──────────────────────────────
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if anthropic_key and not anthropic_key.startswith("your_"):
         try:
@@ -439,7 +514,7 @@ def analyze(company_name: str, content: str,
     else:
         print("Claude skipped — ANTHROPIC_API_KEY not configured")
 
-    # ── Layer 6: Local cache ──────────────────────────────────────────────────
+    # ── Layer 8: Local cache ──────────────────────────────────────────────────
     cached = _lookup_local_cache(company_name)
     if cached:
         print(f"Using local cache for: {company_name}")
@@ -459,6 +534,6 @@ def analyze(company_name: str, content: str,
             cached["evidence"] = _normalise_evidence(ev) if ev else []
         return cached
 
-    # ── Layer 7: Generic mock ─────────────────────────────────────────────────
+    # ── Layer 9: Generic mock ─────────────────────────────────────────────────
     print(f"All layers failed for '{company_name}' — returning generic mock")
     return MOCK_RESULT
