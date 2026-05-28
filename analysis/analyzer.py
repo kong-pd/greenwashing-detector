@@ -333,10 +333,12 @@ def analyze_with_claude(company_name, content, evidence_list, cdp):
     return _parse_json(response.content[0].text)
 
 
-def analyze_with_gemini(company_name, content, evidence_list, cdp):
+def analyze_with_gemini(company_name, content, evidence_list, cdp,
+                        model_name: str = "gemini-2.5-flash-lite"):
+    """Call a specific Gemini model. model_name is configurable for fallback chain."""
     genai.configure(api_key=os.environ["GEMINI_API_KEY"])
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash-lite",
+        model_name=model_name,
         system_instruction=SYSTEM_PROMPT,
     )
     response = model.generate_content(
@@ -345,24 +347,61 @@ def analyze_with_gemini(company_name, content, evidence_list, cdp):
     return _parse_json(response.text)
 
 
+# ─── Gemini model fallback chain ──────────────────────────────────────────────
+# Three free-tier models ordered by availability → quality.
+# Flash-Lite: 1,000 req/day (most available, primary)
+# Flash:        250 req/day (backup-1)
+# Pro:          100 req/day (backup-2, best quality)
+
+GEMINI_MODELS = [
+    ("gemini-2.5-flash-lite", "primary"),
+    ("gemini-2.5-flash",      "backup-1"),
+    ("gemini-2.5-pro",        "backup-2"),
+]
+
+
+def _try_gemini_chain(company_name, content, ev, cdp) -> dict | None:
+    """
+    Try each Gemini model in order until one succeeds.
+    Returns processed result or None if all models fail.
+    """
+    for model_name, label in GEMINI_MODELS:
+        try:
+            raw    = analyze_with_gemini(company_name, content, ev, cdp, model_name)
+            result = _process_result(raw, ev)
+            print(f"Gemini {label} ({model_name}): success")
+            return result
+
+        except Exception as e:
+            err_str = str(e).lower()
+            if "permission" in err_str or "credential" in err_str or "api key" in err_str:
+                print(f"[CONFIG_ERROR] Gemini auth failed — check GEMINI_API_KEY: {e}")
+                return None   # auth error → no point trying other models
+            elif "quota" in err_str or "rate" in err_str or "503" in err_str or "unavailable" in err_str:
+                print(f"[TRANSIENT] Gemini {label} ({model_name}) unavailable — trying next model")
+            elif isinstance(e, (json.JSONDecodeError, KeyError, ValueError)):
+                print(f"[PARSE_ERROR] Gemini {label} ({model_name}) bad JSON — trying next model: {e}")
+            else:
+                print(f"[UNKNOWN] Gemini {label} ({model_name}) failed ({type(e).__name__}) — trying next: {e}")
+
+    print("All Gemini models exhausted — falling back to next layer")
+    return None
+
+
 # ─── Main entry point ─────────────────────────────────────────────────────────
 
 def analyze(company_name: str, content: str,
             evidence_list: list[dict] | None = None,
             cdp: str = "No data") -> dict | None:
     """
-    Four-layer fallback chain:
-      1. Mock mode  (USE_MOCK=true)
-      2. Claude API (primary)        — with classified exception handling
-      3. Gemini API (automatic fallback) — with classified exception handling
-      4. Local cache (zero-network fallback for demo companies)
-      5. Generic mock (absolute last resort)
-
-    Exception classification (applied to both Claude and Gemini):
-      [CONFIG_ERROR] — auth failure; developer problem, not transient
-      [TRANSIENT]    — rate limit, timeout, network; silent fallback expected
-      [PARSE_ERROR]  — bad JSON or missing fields in response
-      [UNKNOWN]      — anything else; log prominently for investigation
+    Fallback chain (Gemini-first, Claude optional, cost-conscious):
+      1. Mock mode              (USE_MOCK=true)
+      2. Gemini Flash-Lite      (primary   — 1,000 req/day free)
+      3. Gemini Flash           (backup-1  —   250 req/day free)
+      4. Gemini Pro             (backup-2  —   100 req/day free, best quality)
+      5. Claude Sonnet          (optional paid fallback — only if ANTHROPIC_API_KEY set)
+      6. Local cache            (zero-network, demo companies)
+      7. Generic mock           (absolute last resort)
     """
     ev = evidence_list or []
 
@@ -371,55 +410,36 @@ def analyze(company_name: str, content: str,
         print("Mock mode active")
         return MOCK_RESULT
 
-    # ── Layer 2: Claude ───────────────────────────────────────────────────────
-    try:
-        raw = analyze_with_claude(company_name, content, ev, cdp)
-        result = _process_result(raw, ev)
-        print("Claude API: success")
+    # ── Layers 2–4: Gemini chain (primary, all free) ──────────────────────────
+    result = _try_gemini_chain(company_name, content, ev, cdp)
+    if result:
         return result
 
-    except anthropic.AuthenticationError as e:
-        print(f"[CONFIG_ERROR] Claude auth failed — check ANTHROPIC_API_KEY: {e}")
+    # ── Layer 5: Claude (optional paid fallback) ──────────────────────────────
+    # Only attempted if ANTHROPIC_API_KEY is configured to a real value.
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if anthropic_key and not anthropic_key.startswith("your_"):
+        try:
+            raw    = analyze_with_claude(company_name, content, ev, cdp)
+            result = _process_result(raw, ev)
+            print("Claude API: success (paid fallback)")
+            return result
+        except anthropic.AuthenticationError as e:
+            print(f"[CONFIG_ERROR] Claude auth failed: {e}")
+        except (anthropic.RateLimitError,
+                anthropic.APITimeoutError,
+                anthropic.APIConnectionError) as e:
+            print(f"[TRANSIENT] Claude unavailable ({type(e).__name__})")
+        except anthropic.APIStatusError as e:
+            print(f"[TRANSIENT] Claude server error {e.status_code}: {e}")
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            print(f"[PARSE_ERROR] Claude response malformed: {e}")
+        except Exception as e:
+            print(f"[UNKNOWN] Claude error ({type(e).__name__}): {e}")
+    else:
+        print("Claude skipped — ANTHROPIC_API_KEY not configured")
 
-    except (anthropic.RateLimitError,
-            anthropic.APITimeoutError,
-            anthropic.APIConnectionError) as e:
-        print(f"[TRANSIENT] Claude unavailable ({type(e).__name__}) — falling back to Gemini")
-
-    except anthropic.APIStatusError as e:
-        if e.status_code >= 500:
-            print(f"[TRANSIENT] Claude server error {e.status_code} — falling back to Gemini")
-        else:
-            print(f"[UNEXPECTED] Claude client error {e.status_code}: {e}")
-
-    except (json.JSONDecodeError, KeyError, ValueError) as e:
-        print(f"[PARSE_ERROR] Claude response malformed — falling back to Gemini: {e}")
-
-    except Exception as e:
-        print(f"[UNKNOWN] Unexpected Claude error ({type(e).__name__}) — falling back to Gemini: {e}")
-
-    # ── Layer 3: Gemini ───────────────────────────────────────────────────────
-    try:
-        raw = analyze_with_gemini(company_name, content, ev, cdp)
-        result = _process_result(raw, ev)
-        print("Gemini API: success")
-        return result
-
-    except Exception as e:
-        # Gemini exceptions vary by SDK version; catch-all with classification logging
-        err_type = type(e).__name__
-        err_str  = str(e).lower()
-
-        if "permission" in err_str or "credential" in err_str or "api key" in err_str:
-            print(f"[CONFIG_ERROR] Gemini auth failed — check GEMINI_API_KEY: {e}")
-        elif "quota" in err_str or "rate" in err_str or "timeout" in err_str:
-            print(f"[TRANSIENT] Gemini unavailable ({err_type}) — falling back to local cache")
-        elif isinstance(e, (json.JSONDecodeError, KeyError, ValueError)):
-            print(f"[PARSE_ERROR] Gemini response malformed — falling back to local cache: {e}")
-        else:
-            print(f"[UNKNOWN] Unexpected Gemini error ({err_type}) — falling back to local cache: {e}")
-
-    # ── Layer 4: Local cache ──────────────────────────────────────────────────
+    # ── Layer 6: Local cache ──────────────────────────────────────────────────
     cached = _lookup_local_cache(company_name)
     if cached:
         print(f"Using local cache for: {company_name}")
@@ -439,6 +459,6 @@ def analyze(company_name: str, content: str,
             cached["evidence"] = _normalise_evidence(ev) if ev else []
         return cached
 
-    # ── Layer 5: Generic mock ─────────────────────────────────────────────────
+    # ── Layer 7: Generic mock ─────────────────────────────────────────────────
     print(f"All layers failed for '{company_name}' — returning generic mock")
     return MOCK_RESULT
