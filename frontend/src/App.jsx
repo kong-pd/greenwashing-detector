@@ -147,6 +147,8 @@ function LandingScreen({ onCompany, onAnalyze }) {
   const [activeTab, setActiveTab]     = useState("company");
   const [inputValue, setInputValue]   = useState("");
   const [validationMsg, setValidationMsg] = useState("");
+  const [uploadFile,   setUploadFile]  = useState(null);   // FR-02: uploaded PDF file
+  const [uploading,    setUploading]   = useState(false);  // FR-02: reading state
   const inputRef = React.useRef(null);
   const tab = TABS.find(t => t.id === activeTab);
 
@@ -157,6 +159,32 @@ function LandingScreen({ onCompany, onAnalyze }) {
       return () => clearTimeout(t);
     }
   }, [validationMsg]);
+
+  // FR-02: handle PDF file selection → read as text → trigger analysis
+  function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setValidationMsg("File too large — maximum 10 MB");
+      return;
+    }
+    setUploadFile(file);
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setUploading(false);
+      const content = ev.target.result;
+      const companyName = file.name.replace(/\.pdf$/i, "").replace(/[-_]/g, " ");
+      const claim = makeLiveClaim(companyName);
+      // Pass extracted text as manual_content so backend skips scraping
+      onAnalyze({ ...claim, _manualContent: content }, companyName);
+    };
+    reader.onerror = () => {
+      setUploading(false);
+      setValidationMsg("Could not read the file — try pasting the content instead");
+    };
+    reader.readAsText(file);
+  }
 
   // US-01: search triggers analysis pipeline
   function handleAnalyze() {
@@ -206,7 +234,7 @@ function LandingScreen({ onCompany, onAnalyze }) {
               {TABS.map(t => (
                 <button key={t.id} role="tab" aria-selected={activeTab === t.id}
                   className={"lv2-tab" + (activeTab === t.id ? " on" : "")}
-                  onClick={() => { setActiveTab(t.id); setInputValue(""); setValidationMsg(""); }}>
+                  onClick={() => { setActiveTab(t.id); setInputValue(""); setValidationMsg(""); setUploadFile(null); }}>
                   {t.label}
                 </button>
               ))}
@@ -214,14 +242,24 @@ function LandingScreen({ onCompany, onAnalyze }) {
 
             <div className="lv2-input-row">
               {activeTab === "upload" ? (
-                <label className="lv2-upload-zone">
+                <label className="lv2-upload-zone" style={{ cursor: uploading ? "wait" : "pointer" }}>
                   <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
                     <path d="M10 13V5M7 8l3-3 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M4 15h12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
                   </svg>
-                  <span>Drop a PDF or <span className="lv2-upload-link">browse files</span></span>
+                  {uploading ? (
+                    <span>Reading PDF<span className="dots"><span/><span/><span/></span></span>
+                  ) : uploadFile ? (
+                    <span>
+                      {uploadFile.name}
+                      <button style={{ marginLeft: 10, color: "rgba(255,255,255,.5)", fontSize: 11 }}
+                        onClick={e => { e.preventDefault(); setUploadFile(null); }}>✕</button>
+                    </span>
+                  ) : (
+                    <span>Drop a PDF or <span className="lv2-upload-link">browse files</span> — max 10 MB</span>
+                  )}
                   <input type="file" accept=".pdf" style={{ display: "none" }}
-                    onChange={() => gwdToast("PDF upload: paste the company name to trigger analysis", { kind: "warn" })} />
+                    onChange={handleFileChange} />
                 </label>
               ) : (
                 <>
