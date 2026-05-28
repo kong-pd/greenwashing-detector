@@ -1,8 +1,8 @@
 [phases.setup]
 aptPkgs = [
-  "libpango-1.0-0",
-  "libpangocairo-1.0-0",
-  "libcairo2",
-  "libgdk-pixbuf2.0-0",
-  "shared-mime-info"
+  "chromium",
+  "chromium-driver"
 ]
+
+[phases.build]
+cmds = ["pip install -r requirements.txt", "playwright install chromium"]
