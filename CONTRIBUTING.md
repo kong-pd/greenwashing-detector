@@ -39,6 +39,7 @@ git push origin feat/your-feature-name
 git checkout main
 git pull origin main
 git branch -d feat/your-feature-name
+git push origin --delete feat/your-feature-name
 ```
 
 ---
