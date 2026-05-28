@@ -13,30 +13,41 @@
 ```
 SUPABASE_URL=https://iedtlyxlnenfldogvhen.supabase.co
 SUPABASE_ANON_KEY=your_key
-ANTHROPIC_API_KEY=sk-ant-...
 GEMINI_API_KEY=AIzaSy...
-NEWS_API_KEY=your_key
+GROQ_API_KEY=gsk_...
+SERPER_API_KEY=your_key
+GUARDIAN_API_KEY=your_key
+ANTHROPIC_API_KEY=sk-ant-...   # optional paid fallback
 ANALYSIS_SERVICE_URL=https://YOUR_ANALYSIS_RAILWAY_URL
 USE_MOCK=false
+CACHE_TTL_HOURS=48
+NIXPACKS_PYTHON_VERSION=3.11
 ```
 
 5. Copy the generated Railway URL (e.g. `https://greencheck-backend.up.railway.app`)
 
 ---
 
-## 2. Railway — Analysis Service (port 8001)
+## 2. Railway — Analysis Service ($PORT = 8080 on Railway, 8001 locally)
 
 1. New Project → Deploy from same repo, **Root Directory**: `analysis`
-2. Procfile: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+2. Procfile (Railway installs Playwright at startup):
+   ```
+   web: playwright install chromium; playwright install-deps chromium; uvicorn main:app --host 0.0.0.0 --port $PORT
+   ```
 3. Environment Variables:
 
 ```
 SUPABASE_URL=https://iedtlyxlnenfldogvhen.supabase.co
 SUPABASE_ANON_KEY=your_key
-ANTHROPIC_API_KEY=sk-ant-...
 GEMINI_API_KEY=AIzaSy...
-NEWS_API_KEY=your_key
+GROQ_API_KEY=gsk_...
+SERPER_API_KEY=your_key
+GUARDIAN_API_KEY=your_key
+ANTHROPIC_API_KEY=sk-ant-...   # optional paid fallback
 USE_MOCK=false
+CACHE_TTL_HOURS=48
+NIXPACKS_PYTHON_VERSION=3.11
 ```
 
 4. Copy this URL → paste as `ANALYSIS_SERVICE_URL` in the **backend** service above.
