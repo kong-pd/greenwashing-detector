@@ -1,6 +1,6 @@
 # GreenCheck — ESG Greenwashing Detector
 
-> ImagineHack 2026 · A Sustainable Tomorrow · Taylor's University
+
 
 An AI-powered ESG fact-checking engine that cross-references corporate sustainability claims against verified external data and produces a structured credibility report scored across five regulatory dimensions.
 
