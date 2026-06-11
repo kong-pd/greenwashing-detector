@@ -551,6 +551,7 @@ ANALYSIS_SERVICE_URL=http://x pytest tests/ -q
 | A 说三条 bar 全 est. | 透传时重组对象丢了分量 | Phase 2.1 |
 | A 说降级横幅不显示 | fail_reason 没透传 | Phase 2.2 第 4 条 |
 | weasyprint ImportError | 缺系统库 | Phase 0.1 的 ⚠️ |
+| CI 装完依赖、跑到 PDF 测试就崩(`'super' object has no attribute 'transform'`) | weasyprint 62.x 没限制搭档库 pydyf 的版本上限,全新环境装到太新的 pydyf 就不兼容;反过来钉 pydyf==0.8 又低于它要求的最低版,pip 直接报冲突 | 把 weasyprint 升级到 69.0(根目录和 backend 两份 requirements 一起改),让它自己管 pydyf |
 
 ## 写给你的最后一段话
 
