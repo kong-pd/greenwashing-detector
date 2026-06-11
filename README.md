@@ -48,7 +48,7 @@ analysis-service  https://humble-determination-production-4c4f.up.railway.app
 
 ### System Context
 
-![System context diagram](docs/greencheck-c4-context-BetterContrast.png)
+![System context diagram](docs/greencheck-c4-context.png)
 
 ### Service Structure
 
