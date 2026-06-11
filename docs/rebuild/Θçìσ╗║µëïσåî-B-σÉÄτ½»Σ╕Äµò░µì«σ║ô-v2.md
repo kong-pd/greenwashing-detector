@@ -201,6 +201,7 @@ ANALYSIS_SERVICE_URL=http://x USE_MOCK=true pytest tests/ -q     # 33 passed
 | snippet 报告被前端当失败 | completed 时把 fail_reason 抹掉/没透传 | 硬规则 2:无条件透传 |
 | 写库失败后轮询永远 processing 直至超时 | 只读库不读 relay | Phase 3.6;relay 是 NFR-09 的另一半 |
 | CI 上 weasyprint ImportError | 缺系统库 | CI 先 apt 后 pip |
+| CI 报 PDF 渲染崩(`'super' object has no attribute 'transform'` / `PDF.__init__` TypeError) | weasyprint 62.x 对 pydyf 不设上界,新环境抓到 0.11+ 即断;钉 pydyf==0.8 会撞 62.3 的 `>=0.10` 下界直接解析冲突 | 升级 weasyprint≥63(本仓库验证 69.0),根/backend 两份 requirements 同步;不要用 pydyf 旧 pin 兜 |
 | 测试里 `import main` 拿错服务 | 同名模块缓存 | importlib 独立命名加载 |
 
 ## 给后来者的一句话
