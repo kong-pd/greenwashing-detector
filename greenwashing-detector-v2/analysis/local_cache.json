@@ -1,0 +1,563 @@
+{
+  "shell": {
+    "score": 78,
+    "risk_level": "High Risk",
+    "riskLevel": "High Risk",
+    "summary": "Shell's sustainability claims present a high greenwashing risk. The most critical finding is a direct contradiction between the company's self-reported emissions reductions and verified data held in the CDP database and EU ETS registry. Shell's headline 30% operational emissions reduction since 2019 is largely attributable to asset divestment and baseline restatement rather than genuine decarbonisation. Additionally, the company's SAF programme claims a 10% blend rate by 2030 from a current position of 0.4%, with no certified production partnerships disclosed and an active regulatory investigation by Dutch authorities. Across its disclosures, Shell relies heavily on aspirational language without binding timelines, and its SBTi submission has remained under review since 2023.",
+    "confidence": 0.91,
+    "dimension_scores": {
+      "specificity": 18,
+      "data_consistency": 20,
+      "third_party_certification": 16,
+      "negative_news": 15,
+      "greenwashing_language": 9
+    },
+    "dimensionScores": {
+      "specificity": 18,
+      "data_consistency": 20,
+      "third_party_certification": 16,
+      "negative_news": 15,
+      "greenwashing_language": 9
+    },
+    "flags": [
+      {
+        "type": "Data Contradiction",
+        "severity": "high",
+        "description": "Shell claims a 30% reduction in Scope 1+2 emissions since 2019, but EU ETS verified data shows only an 8.5% reduction across European assets over the same period. The headline figure relies on a 2019 baseline restated following the Nigerian asset divestment.",
+        "source": "EU ETS Union Registry 2024; Shell Restated Baseline Memorandum 2023"
+      },
+      {
+        "type": "Lack of Certification",
+        "severity": "high",
+        "description": "Shell's SAF programme claims a 10% blend rate by 2030 from a current 0.4%, with no ISCC or RSB certification and no disclosed production partnership. Dutch regulators have opened a preliminary inquiry into the marketing claims.",
+        "source": "ACM Case Register 2026-03-14; ISCC Certificate Database"
+      },
+      {
+        "type": "Vague Claims",
+        "severity": "medium",
+        "description": "Shell's net-zero 2050 commitment lacks interim milestones and excludes Scope 3 where not 'material'. The SBTi submission has been under review since August 2023 with no validated targets on file.",
+        "source": "SBTi Corporate Database; Shell Sustainability Report 2025"
+      }
+    ],
+    "sources": [
+      "https://www.shell.com/sustainability",
+      "EU ETS Union Registry",
+      "CDP Public Database 2024",
+      "Reuters 2024-03-14",
+      "SBTi Corporate Database"
+    ],
+    "evidence": [
+      {
+        "id": "E-01",
+        "kind": "Filing",
+        "title": "SBTi Corporate Database — Shell entry",
+        "org": "Science Based Targets initiative",
+        "date": "2026-04-02",
+        "url": "https://sciencebasedtargets.org/companies-taking-action",
+        "quote": "Status: Commitment under review since 2023-08-11. No validated near-term or net-zero targets on file.",
+        "reliability": 0.9,
+        "recency": 0.95,
+        "relevance": 0.85,
+        "weight": 0.89
+      },
+      {
+        "id": "E-02",
+        "kind": "Filing",
+        "title": "EU ETS Union Registry — Shell verified emissions 2019–2023",
+        "org": "EU ETS Union Registry",
+        "date": "2024-04-30",
+        "url": "https://climate.ec.europa.eu/eu-action/eu-emissions-trading-system-eu-ets_en",
+        "quote": "Verified Scope 1 installations data shows an 8.5% reduction across Shell's European assets since 2019, against the company's headline claim of 30%.",
+        "reliability": 0.9,
+        "recency": 0.5,
+        "relevance": 0.95,
+        "weight": 0.85
+      },
+      {
+        "id": "E-03",
+        "kind": "News",
+        "title": "Dutch regulator ACM opens inquiry into Shell SAF and carbon-neutral marketing",
+        "org": "Reuters",
+        "date": "2024-03-14",
+        "url": "https://www.reuters.com/sustainability/",
+        "quote": "The Authority for Consumers and Markets opened a formal inquiry into Shell's sustainable aviation fuel marketing claims of a 10% blend rate by 2030.",
+        "reliability": 0.85,
+        "recency": 0.5,
+        "relevance": 0.9,
+        "weight": 0.8
+      },
+      {
+        "id": "E-04",
+        "kind": "Database",
+        "title": "CDP Public Database 2024 — Shell climate disclosure record",
+        "org": "CDP",
+        "date": "2024-11-12",
+        "url": "https://www.cdp.net/en/data",
+        "quote": "Shell's 2024 CDP climate response discloses restated 2019 baseline figures following the Nigerian onshore asset divestment.",
+        "reliability": 0.86,
+        "recency": 0.65,
+        "relevance": 0.78,
+        "weight": 0.8
+      },
+      {
+        "id": "E-05",
+        "kind": "Document",
+        "title": "Shell Sustainability Report 2025",
+        "org": "Shell Global",
+        "date": "2026-03-15",
+        "url": "https://www.shell.com/sustainability",
+        "quote": "We are committed to becoming a net-zero emissions energy business by 2050, in step with society's progress.",
+        "reliability": 0.55,
+        "recency": 0.95,
+        "relevance": 0.7,
+        "weight": 0.65
+      }
+    ]
+  },
+  "h&m": {
+    "score": 71,
+    "risk_level": "High Risk",
+    "riskLevel": "High Risk",
+    "summary": "H&M's sustainability claims carry high greenwashing risk, centred on the Conscious Collection and broader claims about sustainable materials. A 2022 ruling by the Norwegian Consumer Authority found H&M's sustainability scorecards misleading, and the UK Advertising Standards Authority upheld a similar complaint. Independent audits found that H&M's definition of 'sustainable cotton' and 'recycled materials' included categories that do not meaningfully reduce environmental impact. The company's Transparency Scorecard, presented as evidence of supply chain accountability, has been criticised by Fashion Revolution for omitting supplier-level environmental data. H&M's 2040 climate-positive target lacks a credible transition plan and is not backed by SBTi validation.",
+    "confidence": 0.88,
+    "dimension_scores": {
+      "specificity": 14,
+      "data_consistency": 17,
+      "third_party_certification": 15,
+      "negative_news": 16,
+      "greenwashing_language": 9
+    },
+    "dimensionScores": {
+      "specificity": 14,
+      "data_consistency": 17,
+      "third_party_certification": 15,
+      "negative_news": 16,
+      "greenwashing_language": 9
+    },
+    "flags": [
+      {
+        "type": "Negative News",
+        "severity": "high",
+        "description": "The Norwegian Consumer Authority ruled in 2022 that H&M's Conscious Collection sustainability scorecards were misleading consumers. The UK ASA upheld a separate complaint regarding unsubstantiated environmental claims in 2023.",
+        "source": "Norwegian Consumer Authority ruling 2022; UK ASA adjudication 2023"
+      },
+      {
+        "type": "Data Contradiction",
+        "severity": "high",
+        "description": "H&M claims 78% of materials used are recycled or sustainably sourced, but independent analysis by Changing Markets Foundation found that 96% of H&M's green claims relied on certifications that do not verify actual environmental impact.",
+        "source": "Changing Markets Foundation Report 2021; H&M Sustainability Report 2024"
+      },
+      {
+        "type": "Vague Claims",
+        "severity": "medium",
+        "description": "H&M's 2040 climate-positive target is not validated by SBTi and contains no disclosed interim reduction milestones for 2025, 2030, or 2035. The phrase 'climate positive' is used without a recognised methodology definition.",
+        "source": "H&M Annual Report 2024; SBTi Corporate Database"
+      }
+    ],
+    "sources": [
+      "https://hmgroup.com/sustainability",
+      "Norwegian Consumer Authority 2022",
+      "Changing Markets Foundation 2021",
+      "UK ASA 2023",
+      "SBTi Corporate Database"
+    ],
+    "evidence": [
+      {
+        "id": "E-01",
+        "kind": "Filing",
+        "title": "Norwegian Consumer Authority ruling on H&M Conscious Collection",
+        "org": "Norwegian Consumer Authority",
+        "date": "2022-06-15",
+        "url": "https://www.forbrukertilsynet.no/english",
+        "quote": "The environmental claims used to market the Conscious Collection are insufficiently substantiated and likely to mislead consumers.",
+        "reliability": 0.9,
+        "recency": 0.5,
+        "relevance": 0.95,
+        "weight": 0.85
+      },
+      {
+        "id": "E-02",
+        "kind": "Filing",
+        "title": "UK ASA adjudication — H&M environmental advertising",
+        "org": "Advertising Standards Authority",
+        "date": "2023-09-06",
+        "url": "https://www.asa.org.uk/rulings.html",
+        "quote": "Broad claims of 'more sustainable materials' without accessible substantiation breached the advertising code.",
+        "reliability": 0.9,
+        "recency": 0.5,
+        "relevance": 0.88,
+        "weight": 0.85
+      },
+      {
+        "id": "E-03",
+        "kind": "Filing",
+        "title": "SBTi Corporate Database — H&M Group entry",
+        "org": "Science Based Targets initiative",
+        "date": "2026-02-20",
+        "url": "https://sciencebasedtargets.org/companies-taking-action",
+        "quote": "Near-term targets validated; net-zero target submission pending full pathway disclosure.",
+        "reliability": 0.9,
+        "recency": 0.8,
+        "relevance": 0.62,
+        "weight": 0.85
+      },
+      {
+        "id": "E-04",
+        "kind": "News",
+        "title": "Synthetics Anonymous: H&M among brands with unsubstantiated sustainability claims",
+        "org": "Changing Markets Foundation",
+        "date": "2021-06-29",
+        "url": "https://changingmarkets.org/reports/",
+        "quote": "96% of H&M's assessed claims were unsubstantiated or misleading under CMA green claims guidance, the highest share among fashion brands reviewed.",
+        "reliability": 0.6,
+        "recency": 0.5,
+        "relevance": 0.85,
+        "weight": 0.67
+      },
+      {
+        "id": "E-05",
+        "kind": "Document",
+        "title": "H&M Group Sustainability Disclosure 2024",
+        "org": "H&M Group",
+        "date": "2025-03-27",
+        "url": "https://hmgroup.com/sustainability/",
+        "quote": "We aim for 100% recycled or other sustainably sourced materials by 2030.",
+        "reliability": 0.55,
+        "recency": 0.65,
+        "relevance": 0.72,
+        "weight": 0.63
+      }
+    ]
+  },
+  "patagonia": {
+    "score": 18,
+    "risk_level": "Low Risk",
+    "riskLevel": "Low Risk",
+    "summary": "Patagonia presents a low greenwashing risk and serves as a benchmark for credible ESG disclosure in the apparel sector. The company publishes detailed supply chain maps, third-party verified environmental data, and maintains B Corp certification with a score of 151.4 — well above the 80-point threshold. Patagonia's Worn Wear programme, self-repair guides, and 2022 transfer of ownership to the Patagonia Purpose Trust demonstrate structural commitment rather than marketing-led sustainability claims. Scope 1, 2 and 3 emissions are independently assured, and the company publishes its full supplier list including environmental performance grades. The primary area of improvement noted is the absence of SBTi validation for its 2025 carbon targets.",
+    "confidence": 0.93,
+    "dimension_scores": {
+      "specificity": 3,
+      "data_consistency": 4,
+      "third_party_certification": 3,
+      "negative_news": 2,
+      "greenwashing_language": 6
+    },
+    "dimensionScores": {
+      "specificity": 3,
+      "data_consistency": 4,
+      "third_party_certification": 3,
+      "negative_news": 2,
+      "greenwashing_language": 6
+    },
+    "flags": [
+      {
+        "type": "Lack of Certification",
+        "severity": "low",
+        "description": "Patagonia's 2025 carbon reduction targets are not validated by the Science Based Targets initiative. The company has committed to reduction goals but has not submitted for formal SBTi verification.",
+        "source": "SBTi Corporate Database; Patagonia Environmental Responsibility Report 2024"
+      },
+      {
+        "type": "Vague Claims",
+        "severity": "low",
+        "description": "Patagonia uses the phrase 'responsible down standard' and 'Fair Trade Certified' across product lines, but the proportion of total products carrying these certifications is not prominently disclosed in the headline sustainability statements.",
+        "source": "Patagonia Product Pages; Environmental Responsibility Report 2024"
+      },
+      {
+        "type": "Greenwashing Language",
+        "severity": "low",
+        "description": "Minor use of aspirational language ('working toward', 'committed to reducing') in the supply chain section, though these are substantially outnumbered by quantified, time-bound claims across the broader report.",
+        "source": "Patagonia Environmental Responsibility Report 2024"
+      }
+    ],
+    "sources": [
+      "https://www.patagonia.com/our-footprint",
+      "B Corp Profile — Patagonia",
+      "SBTi Corporate Database",
+      "Patagonia Environmental Responsibility Report 2024"
+    ],
+    "evidence": [
+      {
+        "id": "E-01",
+        "kind": "Filing",
+        "title": "SBTi target dashboard — Patagonia validated 1.5°C-aligned targets",
+        "org": "Science Based Targets initiative",
+        "date": "2025-10-18",
+        "url": "https://sciencebasedtargets.org/companies-taking-action",
+        "quote": "Near-term science-based targets validated as consistent with a 1.5°C pathway, covering Scope 1, 2 and material Scope 3 categories.",
+        "reliability": 0.9,
+        "recency": 0.8,
+        "relevance": 0.88,
+        "weight": 0.87
+      },
+      {
+        "id": "E-02",
+        "kind": "Database",
+        "title": "B Corp Directory — Patagonia certification profile",
+        "org": "B Lab",
+        "date": "2025-12-04",
+        "url": "https://www.bcorporation.net/en-us/find-a-b-corp/company/patagonia-inc/",
+        "quote": "Certified since 2011; overall B Impact Score 151.4, against a 80-point certification threshold and a 50.9 median for ordinary businesses.",
+        "reliability": 0.86,
+        "recency": 0.8,
+        "relevance": 0.9,
+        "weight": 0.86
+      },
+      {
+        "id": "E-03",
+        "kind": "Document",
+        "title": "Patagonia Environmental Responsibility Report 2024",
+        "org": "Patagonia",
+        "date": "2025-04-22",
+        "url": "https://www.patagonia.com/our-footprint/",
+        "quote": "87% of line items disclose factory-level origin; remaining supplier-attribution gaps in the down supply chain are listed as open issues.",
+        "reliability": 0.55,
+        "recency": 0.65,
+        "relevance": 0.8,
+        "weight": 0.65
+      },
+      {
+        "id": "E-04",
+        "kind": "Document",
+        "title": "Our Footprint — Patagonia supply chain disclosure hub",
+        "org": "Patagonia",
+        "date": "2026-01-15",
+        "url": "https://www.patagonia.com/our-footprint/",
+        "quote": "Material-level impact data is published per product, including recycled content shares and Fair Trade Certified sewing volumes.",
+        "reliability": 0.55,
+        "recency": 0.8,
+        "relevance": 0.7,
+        "weight": 0.65
+      }
+    ]
+  },
+  "tesla": {
+    "score": 44,
+    "risk_level": "Medium Risk",
+    "riskLevel": "Medium Risk",
+    "summary": "Tesla presents a medium greenwashing risk — a nuanced profile where the core product mission is genuine but surrounding ESG claims are inconsistently substantiated. Tesla's vehicles demonstrably reduce tailpipe emissions, and the company's energy storage and solar products contribute to grid decarbonisation. However, Tesla was removed from the S&P 500 ESG Index in 2022 due to concerns around working conditions, racial discrimination claims, and the handling of regulatory safety investigations. Tesla does not publish a formal ESG report aligned with GRI, SASB, or TCFD standards, making independent verification difficult. Supply chain transparency is limited, and cobalt sourcing practices have attracted scrutiny from human rights organisations.",
+    "confidence": 0.85,
+    "dimension_scores": {
+      "specificity": 8,
+      "data_consistency": 10,
+      "third_party_certification": 12,
+      "negative_news": 9,
+      "greenwashing_language": 5
+    },
+    "dimensionScores": {
+      "specificity": 8,
+      "data_consistency": 10,
+      "third_party_certification": 12,
+      "negative_news": 9,
+      "greenwashing_language": 5
+    },
+    "flags": [
+      {
+        "type": "Lack of Certification",
+        "severity": "medium",
+        "description": "Tesla does not publish a sustainability report aligned with GRI, SASB, or TCFD frameworks, and has no SBTi-validated climate targets. The absence of standardised disclosure makes independent verification of ESG claims significantly harder.",
+        "source": "S&P Global ESG Scores 2024; SBTi Corporate Database"
+      },
+      {
+        "type": "Negative News",
+        "severity": "medium",
+        "description": "Tesla was removed from the S&P 500 ESG Index in May 2022 citing working condition concerns, racial discrimination allegations at the Fremont factory, and NHTSA safety investigations. Multiple class-action suits related to labour practices remain active.",
+        "source": "S&P Global ESG removal announcement 2022; NHTSA investigation records"
+      },
+      {
+        "type": "Data Contradiction",
+        "severity": "medium",
+        "description": "Tesla claims significant lifetime emissions savings per vehicle but does not publicly disclose full lifecycle emissions data including battery manufacturing and supply chain Scope 3. Third-party lifecycle analyses vary by up to 40% depending on the electricity grid assumed.",
+        "source": "Tesla Impact Report 2023; Transport & Environment Lifecycle Analysis 2024"
+      }
+    ],
+    "sources": [
+      "https://www.tesla.com/impact",
+      "S&P 500 ESG Index 2022",
+      "SBTi Corporate Database",
+      "Transport & Environment 2024",
+      "NHTSA Investigation Records"
+    ],
+    "evidence": [
+      {
+        "id": "E-01",
+        "kind": "Filing",
+        "title": "SBTi Corporate Database — Tesla entry",
+        "org": "Science Based Targets initiative",
+        "date": "2026-03-08",
+        "url": "https://sciencebasedtargets.org/companies-taking-action",
+        "quote": "No commitment or validated targets on file.",
+        "reliability": 0.9,
+        "recency": 0.8,
+        "relevance": 0.85,
+        "weight": 0.86
+      },
+      {
+        "id": "E-02",
+        "kind": "Filing",
+        "title": "NHTSA investigation records — Tesla driver-assistance defect inquiries",
+        "org": "NHTSA",
+        "date": "2024-04-26",
+        "url": "https://www.nhtsa.gov/recalls",
+        "quote": "Open defect investigations and recall remediation oversight concerning Autopilot driver-engagement safeguards.",
+        "reliability": 0.9,
+        "recency": 0.5,
+        "relevance": 0.72,
+        "weight": 0.85
+      },
+      {
+        "id": "E-03",
+        "kind": "Database",
+        "title": "S&P Global ESG Scores — Tesla assessment and S&P 500 ESG Index removal",
+        "org": "S&P Global",
+        "date": "2022-05-18",
+        "url": "https://www.spglobal.com/esg/scores/",
+        "quote": "Tesla was removed from the S&P 500 ESG Index citing the absence of a low-carbon strategy disclosure and codes-of-business-conduct criteria.",
+        "reliability": 0.86,
+        "recency": 0.5,
+        "relevance": 0.9,
+        "weight": 0.8
+      },
+      {
+        "id": "E-04",
+        "kind": "News",
+        "title": "Lifecycle analysis: EV supply-chain emissions accounting gaps",
+        "org": "Transport & Environment",
+        "date": "2024-07-09",
+        "url": "https://www.transportenvironment.org/publications/",
+        "quote": "Manufacturer impact reporting, including Tesla's, omits comparable battery supply-chain emissions baselines, hindering independent verification.",
+        "reliability": 0.6,
+        "recency": 0.65,
+        "relevance": 0.8,
+        "weight": 0.68
+      },
+      {
+        "id": "E-05",
+        "kind": "Document",
+        "title": "Tesla Impact Report 2023",
+        "org": "Tesla",
+        "date": "2024-05-23",
+        "url": "https://www.tesla.com/impact",
+        "quote": "Customers avoided releasing over 20 million metric tons of CO2e in 2023 by driving our vehicles.",
+        "reliability": 0.55,
+        "recency": 0.5,
+        "relevance": 0.75,
+        "weight": 0.61
+      }
+    ]
+  },
+  "bp": {
+    "score": 74,
+    "risk_level": "High Risk",
+    "riskLevel": "High Risk",
+    "summary": "BP presents a high greenwashing risk, amplified by the company's high-profile 2020 pivot to a 'beyond petroleum' narrative that has since been substantially reversed. BP set a net-zero by 2050 target in 2020, but its 2023 strategy update weakened oil and gas production reduction targets, drawing sharp criticism from ESG analysts and institutional investors. The UK Advertising Standards Authority banned BP advertising claims about its clean energy transition in 2019. Carbon Brief analysis found BP's advertised low-carbon investments represent under 3% of total capital expenditure. The company's emissions intensity-based targets allow absolute emissions to increase as production grows.",
+    "confidence": 0.89,
+    "dimension_scores": {
+      "specificity": 15,
+      "data_consistency": 18,
+      "third_party_certification": 13,
+      "negative_news": 17,
+      "greenwashing_language": 11
+    },
+    "dimensionScores": {
+      "specificity": 15,
+      "data_consistency": 18,
+      "third_party_certification": 13,
+      "negative_news": 17,
+      "greenwashing_language": 11
+    },
+    "flags": [
+      {
+        "type": "Data Contradiction",
+        "severity": "high",
+        "description": "BP's 2023 strategy update reversed its 2020 commitment to reduce oil and gas production by 40% by 2030, weakening the target to 25%. Absolute emissions are projected to increase under the revised plan despite net-zero 2050 claims remaining in place.",
+        "source": "BP Strategy Update February 2023; Carbon Tracker analysis 2023"
+      },
+      {
+        "type": "Negative News",
+        "severity": "high",
+        "description": "The UK Advertising Standards Authority banned BP's 'possibilities everywhere' campaign in 2019 for misleading claims about its low-carbon credentials. Carbon Brief found low-carbon investment represented less than 3% of BP's total capex at time of the campaign.",
+        "source": "UK ASA Adjudication 2019; Carbon Brief analysis 2019"
+      },
+      {
+        "type": "Vague Claims",
+        "severity": "medium",
+        "description": "BP's net-zero 2050 target is framed on an emissions intensity basis rather than absolute terms, allowing production growth to offset per-barrel improvements. The transition plan contains no binding interim milestones prior to 2030.",
+        "source": "BP Net Zero Ambition Report 2020; ClientEarth legal analysis 2023"
+      }
+    ],
+    "sources": [
+      "https://www.bp.com/sustainability",
+      "UK ASA Adjudication 2019",
+      "BP Strategy Update 2023",
+      "Carbon Tracker 2023",
+      "Carbon Brief 2019"
+    ],
+    "evidence": [
+      {
+        "id": "E-01",
+        "kind": "Filing",
+        "title": "UK ASA Adjudication — BP 'Possibilities Everywhere' campaign",
+        "org": "Advertising Standards Authority",
+        "date": "2019-12-04",
+        "url": "https://www.asa.org.uk/rulings.html",
+        "quote": "Complaints upheld that the advertising gave a misleading impression of the proportion of BP's business in low-carbon energy.",
+        "reliability": 0.9,
+        "recency": 0.5,
+        "relevance": 0.9,
+        "weight": 0.85
+      },
+      {
+        "id": "E-02",
+        "kind": "News",
+        "title": "BP scales back emissions-reduction pledge in strategy reset",
+        "org": "Reuters",
+        "date": "2023-02-07",
+        "url": "https://www.reuters.com/business/energy/",
+        "quote": "BP cut its 2030 emissions-reduction target from 35-40% to 20-30% while extending planned oil and gas output.",
+        "reliability": 0.85,
+        "recency": 0.5,
+        "relevance": 0.92,
+        "weight": 0.8
+      },
+      {
+        "id": "E-03",
+        "kind": "News",
+        "title": "Analysis: BP's spending plans versus 'beyond petroleum' narrative",
+        "org": "Carbon Tracker",
+        "date": "2023-03-21",
+        "url": "https://carbontracker.org/reports/",
+        "quote": "Capital allocation remains weighted towards upstream hydrocarbons relative to transition businesses, inconsistent with the net-zero narrative.",
+        "reliability": 0.6,
+        "recency": 0.5,
+        "relevance": 0.85,
+        "weight": 0.67
+      },
+      {
+        "id": "E-04",
+        "kind": "News",
+        "title": "Factcheck: BP advertising and lobbying record on climate",
+        "org": "Carbon Brief",
+        "date": "2019-10-15",
+        "url": "https://www.carbonbrief.org/",
+        "quote": "Analysis of BP's public messaging found low-carbon themes dominate advertising despite over 96% of capex remaining in oil and gas.",
+        "reliability": 0.6,
+        "recency": 0.5,
+        "relevance": 0.78,
+        "weight": 0.64
+      },
+      {
+        "id": "E-05",
+        "kind": "Document",
+        "title": "BP Net Zero Ambition Report 2020",
+        "org": "BP",
+        "date": "2020-02-12",
+        "url": "https://www.bp.com/en/global/corporate/sustainability.html",
+        "quote": "Our ambition is to be a net zero company by 2050 or sooner, and to help the world get to net zero.",
+        "reliability": 0.55,
+        "recency": 0.5,
+        "relevance": 0.68,
+        "weight": 0.59
+      }
+    ]
+  }
+}
