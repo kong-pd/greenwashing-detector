@@ -147,7 +147,7 @@ npm run dev
 
 ## Emergency Procedures
 
-**CI is failing but you need to merge urgently before demo:**
+**CI is failing but you need to merge urgently before a release:**
 
 The repo owner can temporarily disable the branch protection rule under
 GitHub → Settings → Branches, merge, then re-enable it afterwards.

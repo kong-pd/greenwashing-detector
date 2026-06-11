@@ -7,7 +7,7 @@ from pathlib import Path
 
 # ─── Local cache ──────────────────────────────────────────────────────────────
 
-_CACHE_PATH = Path(__file__).parent / "local_cache.json"
+_CACHE_PATH = Path(__file__).resolve().parent / "local_cache.json"
 
 def _load_local_cache() -> dict:
     try:
@@ -33,7 +33,14 @@ def _lookup_local_cache(company_name: str) -> dict | None:
     return None
 
 
-# ─── Weight clamping ──────────────────────────────────────────────────────────
+# ─── Weight clamping & explainable components ────────────────────────────────
+# M5 contract (wiki 10 · Weight Component Schema):
+#   reliability — engineering-determined: kind base + Tier-1 outlet floor
+#   recency     — engineering-determined: from evidence date at analysis time
+#   relevance   — AI-judged: the weight the model assigns within the kind band,
+#                 i.e. "how directly this item supports/contradicts the claim"
+#   weight      — clamp_band(0.45*reliability + 0.20*recency + 0.35*relevance)
+# The AI judges relevance; engineering guarantees the floor and the band.
 
 WEIGHT_BANDS: dict[str, tuple[float, float]] = {
     "Filing":     (0.85, 0.95),
@@ -43,6 +50,49 @@ WEIGHT_BANDS: dict[str, tuple[float, float]] = {
     "Linguistic": (0.30, 0.55),
 }
 
+KIND_RELIABILITY_BASE: dict[str, float] = {
+    "Filing":     0.90,
+    "Database":   0.86,
+    "News":       0.60,
+    "Document":   0.55,
+    "Linguistic": 0.45,
+}
+
+# Tier-1 outlets get a reliability floor of 0.85 — mainstream wire/major press.
+# Matched on the evidence `org` field, case-insensitive exact name.
+TIER1_OUTLETS = {
+    "reuters", "financial times", "ft", "bloomberg", "the guardian",
+    "guardian", "bbc", "associated press", "ap", "wall street journal",
+    "wsj", "the new york times", "new york times", "nyt",
+}
+
+COMPONENT_WEIGHTS = {"reliability": 0.45, "recency": 0.20, "relevance": 0.35}
+
+
+def _reliability(kind: str, org: str | None) -> float:
+    base = KIND_RELIABILITY_BASE.get(kind, 0.60)
+    if kind == "News" and (org or "").strip().lower() in TIER1_OUTLETS:
+        base = max(base, 0.85)
+    return round(base, 2)
+
+
+def _recency(date_str: str | None) -> float:
+    """Date → freshness score at analysis time. Unknown dates score 0.50."""
+    from datetime import date
+    try:
+        d = date.fromisoformat((date_str or "").strip())
+    except Exception:
+        return 0.50
+    days = (date.today() - d).days
+    if days <= 90:
+        return 0.95
+    if days <= 365:
+        return 0.80
+    if days <= 730:
+        return 0.65
+    return 0.50
+
+
 def _clamp_weight(kind: str, weight: float | None) -> float:
     lo, hi = WEIGHT_BANDS.get(kind, (0.0, 1.0))
     if weight is None:
@@ -50,20 +100,50 @@ def _clamp_weight(kind: str, weight: float | None) -> float:
     return round(max(lo, min(hi, float(weight))), 2)
 
 
+def _band_midpoint(kind: str) -> float:
+    lo, hi = WEIGHT_BANDS.get(kind, (0.0, 1.0))
+    return round((lo + hi) / 2, 2)
+
+
+def _compose_weight(kind: str, reliability: float, recency: float,
+                    relevance: float) -> float:
+    raw = (COMPONENT_WEIGHTS["reliability"] * reliability
+           + COMPONENT_WEIGHTS["recency"] * recency
+           + COMPONENT_WEIGHTS["relevance"] * relevance)
+    return _clamp_weight(kind, raw)
+
+
 def _normalise_evidence(evidence_list: list[dict]) -> list[dict]:
+    """
+    Post-AI evidence pass:
+      1. relevance := the AI-assigned weight (band midpoint if missing)
+      2. reliability / recency computed deterministically
+      3. final weight = weighted composition, clamped to the kind band
+      4. all three components stored on the object for the frontend Drawer
+    """
     normalised = []
     for item in evidence_list:
-        kind   = item.get("kind", "News")
-        weight = _clamp_weight(kind, item.get("weight"))
+        kind        = item.get("kind", "News")
+        org         = item.get("org", "")
+        date_str    = item.get("date", "")
+        ai_weight   = item.get("weight")
+        relevance   = (round(float(ai_weight), 2)
+                       if isinstance(ai_weight, (int, float))
+                       else _band_midpoint(kind))
+        reliability = _reliability(kind, org)
+        recency     = _recency(date_str)
         normalised.append({
-            "id":     item.get("id", ""),
-            "kind":   kind,
-            "title":  item.get("title", ""),
-            "org":    item.get("org", ""),
-            "date":   item.get("date", ""),
-            "url":    item.get("url", ""),
-            "quote":  (item.get("quote") or "")[:300],
-            "weight": weight,
+            "id":          item.get("id", ""),
+            "kind":        kind,
+            "title":       item.get("title", ""),
+            "org":         org,
+            "date":        date_str,
+            "url":         item.get("url", ""),
+            "quote":       (item.get("quote") or "")[:300],
+            "reliability": reliability,
+            "recency":     recency,
+            "relevance":   relevance,
+            "weight":      _compose_weight(kind, reliability, recency, relevance),
         })
     return sorted(normalised, key=lambda x: x["weight"], reverse=True)
 
@@ -264,6 +344,14 @@ score the company on all five dimensions, and return the complete JSON result.""
 
 # ─── Post-processing ──────────────────────────────────────────────────────────
 
+def _derive_risk_level(score: int) -> str:
+    if score <= 30:
+        return "Low Risk"
+    if score <= 60:
+        return "Medium Risk"
+    return "High Risk"
+
+
 def _process_result(raw: dict, input_evidence: list[dict]) -> dict:
     evidence_from_ai = raw.get("evidence") or []
     if evidence_from_ai:
@@ -287,10 +375,25 @@ def _process_result(raw: dict, input_evidence: list[dict]) -> dict:
 
     dim = raw.get("dimension_scores") or {}
 
+    # Score sanity: clamp to 0–100 int; derive risk_level from score when the
+    # model omits it or returns a label inconsistent with the thresholds.
+    try:
+        score = int(round(float(raw.get("score"))))
+    except (TypeError, ValueError):
+        score = sum(int(dim.get(k) or 0) for k in (
+            "specificity", "data_consistency", "third_party_certification",
+            "negative_news", "greenwashing_language"))
+    score = max(0, min(100, score))
+
+    risk_level = raw.get("risk_level")
+    if risk_level not in ("Low Risk", "Medium Risk", "High Risk") \
+            or risk_level != _derive_risk_level(score):
+        risk_level = _derive_risk_level(score)
+
     return {
-        "score":      raw.get("score"),
-        "risk_level": raw.get("risk_level"),
-        "riskLevel":  raw.get("risk_level"),
+        "score":      score,
+        "risk_level": risk_level,
+        "riskLevel":  risk_level,
         "confidence": 0.85,
         "summary":    raw.get("summary", ""),
         "dimension_scores":  dim,
@@ -518,6 +621,8 @@ def analyze(company_name: str, content: str,
     cached = _lookup_local_cache(company_name)
     if cached:
         print(f"Using local cache for: {company_name}")
+        import copy
+        cached = copy.deepcopy(cached)   # never mutate the module-level cache
         for flag in cached.get("flags", []):
             if "severity" not in flag:
                 t = flag.get("type", "")
@@ -530,8 +635,18 @@ def analyze(company_name: str, content: str,
             cached["dimensionScores"] = cached["dimension_scores"]
         if "riskLevel" not in cached and "risk_level" in cached:
             cached["riskLevel"] = cached["risk_level"]
-        if "evidence" not in cached:
-            cached["evidence"] = _normalise_evidence(ev) if ev else []
+        if not cached.get("evidence"):
+            legacy = cached.get("sources") or []
+            if legacy and isinstance(legacy[0], str):
+                # legacy string sources → minimal objects through the same pass
+                cached["evidence"] = _normalise_evidence([
+                    {"id": f"E-{i+1:02d}", "kind": "News", "title": s,
+                     "org": "", "date": "", "url": s if s.startswith("http") else "",
+                     "quote": "", "weight": None}
+                    for i, s in enumerate(legacy)
+                ])
+            else:
+                cached["evidence"] = _normalise_evidence(ev) if ev else []
         return cached
 
     # ── Layer 9: Generic mock ─────────────────────────────────────────────────

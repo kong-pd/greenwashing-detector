@@ -1,6 +1,6 @@
 # GreenCheck — ESG Greenwashing Detector
 
-
+> AI-assisted greenwashing risk analysis for corporate sustainability claims
 
 An AI-powered ESG fact-checking engine that cross-references corporate sustainability claims against verified external data and produces a structured credibility report scored across five regulatory dimensions.
 
@@ -48,7 +48,7 @@ analysis-service  https://humble-determination-production-4c4f.up.railway.app
 
 ### System Context
 
-![System context diagram](docs/greencheck-c4-context.png)
+![System context diagram](docs/greencheck-c4-context-BetterContrast.png)
 
 ### Service Structure
 
@@ -283,7 +283,7 @@ curl https://humble-determination-production-4c4f.up.railway.app/health
 
 ## Contributing
 
-See `CONTRIBUTING.md` for branch naming conventions, commit message format, PR guidelines, and the emergency merge procedure for demo day.
+See `CONTRIBUTING.md` for branch naming conventions, commit message format, PR guidelines, and the expedited merge procedure for release days.
 
 ---
 

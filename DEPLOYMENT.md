@@ -107,7 +107,7 @@ open https://YOUR_PROJECT.vercel.app
 
 ---
 
-## Demo Flow (ImagineHack presentation)
+## Walkthrough (product demo flow)
 
 1. Open the Vercel URL
 2. Search for **"Shell"** → see High Risk 78/100 from local cache (instant, no API needed)

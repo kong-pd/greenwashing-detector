@@ -21,7 +21,7 @@ def _extract_quote(text: str | None) -> str | None:
 def _normalise_serper_date(date_str: str) -> str:
     """Serper 返回相对日期如 '2 days ago'，转为 YYYY-MM-DD。"""
     if not date_str:
-        return "Unknown"
+        return ""
     now = datetime.now()
     # 尝试解析 "Mar 12, 2024" 格式
     for fmt in ("%b %d, %Y", "%B %d, %Y"):
@@ -153,7 +153,7 @@ async def fetch_news_guardian(company_name: str, max_items: int = 3) -> list[dic
             "kind":   "News",
             "title":  (article.get("webTitle") or "").strip(),
             "org":    "The Guardian",
-            "date":   date_raw[:10] if date_raw else "Unknown",
+            "date":   date_raw[:10] if date_raw else "",
             "url":    url,
             "quote":  quote,
             "weight": None,

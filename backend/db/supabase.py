@@ -10,15 +10,15 @@ from supabase import create_client
 
 # ─── Cache TTL ────────────────────────────────────────────────────────────────
 # Completed jobs are reused as cache hits only if completed within this window.
-# Set CACHE_TTL_HOURS=48 in .env for demo day (covers the full 48h hackathon window).
-# Post-hackathon default can be raised to 168 (1 week) or based on disclosure cycles.
+# Tune CACHE_TTL_HOURS per environment: short windows (e.g. 48) suit live
+# showcases; production can raise it to 168 (1 week) or align with disclosure cycles.
 
 _CACHE_TTL_HOURS = int(os.environ.get("CACHE_TTL_HOURS", "24"))
 
 
 # ─── Local cache (read fallback when Supabase is unavailable) ─────────────────
 
-_CACHE_PATH = Path(__file__).parent.parent.parent / "analysis" / "local_cache.json"
+_CACHE_PATH = Path(__file__).resolve().parent.parent.parent / "analysis" / "local_cache.json"
 
 def _load_local_cache() -> dict:
     try:
@@ -41,12 +41,50 @@ def _cache_lookup(company_name: str) -> dict | None:
     return None
 
 
+def coerce_evidence_objects(evidence) -> list[dict]:
+    """
+    Canonical evidence normaliser — the single place where legacy string-array
+    evidence is converted into minimal evidence objects.
+
+    Guarantees the rest of the system (report normaliser, PDF generator,
+    frontend) only ever sees dict-shaped evidence. Items that are already
+    objects pass through untouched, preserving any extra fields
+    (reliability / recency / relevance weight components).
+    """
+    if not isinstance(evidence, list):
+        return []
+    out = []
+    for i, item in enumerate(evidence):
+        if isinstance(item, dict):
+            out.append(item)
+        elif isinstance(item, str):
+            is_url = item.startswith("http")
+            out.append({
+                "id":     f"E-{i+1:02d}",
+                "kind":   "News",
+                "title":  item,
+                "org":    "",
+                "date":   "",
+                "url":    item if is_url else "",
+                "quote":  "",
+                "weight": 0.5,
+            })
+    return out
+
+
 def _cache_to_job(company_name: str, cached: dict) -> dict:
     """
     Shape a local cache entry into the same structure as a Supabase job record.
+
+    Evidence is coerced to object form here (P0 fix): when Supabase is down and
+    a request is served from local_cache.json, both /report and /pdf consume
+    this record directly — a legacy string-array `sources` field would
+    otherwise reach the PDF generator and the frontend as bare strings.
     """
     dim = cached.get("dimension_scores") or cached.get("dimensionScores") or {}
-    evidence = cached.get("evidence") or cached.get("sources") or []
+    evidence = coerce_evidence_objects(
+        cached.get("evidence") or cached.get("sources") or []
+    )
 
     return {
         "id":           f"cached-{company_name[:8].lower().replace(' ', '-')}",

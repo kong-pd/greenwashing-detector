@@ -63,7 +63,8 @@ def test_local_cache_patagonia_returns_result():
     """
     Patagonia is in local_cache.json.
     Even with Supabase unavailable (placeholder key in CI),
-    the system should return a result from local cache.
+    the system must serve the COMPLETE cached report — a lenient
+    "score or job_id" assertion previously masked a cache-path bug.
     """
     response = client.post(
         "/api/analyze",
@@ -71,8 +72,9 @@ def test_local_cache_patagonia_returns_result():
     )
     assert response.status_code == 200
     data = response.json()
-    # Should have a score (from local cache)
-    assert "score" in data or "job_id" in data or "id" in data
+    assert data["status"] == "completed"
+    assert isinstance(data["score"], int) and data["score"] > 0
+    assert data["evidence"], "cached evidence objects must be present"
 
 
 def test_history_returns_list():

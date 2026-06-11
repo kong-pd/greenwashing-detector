@@ -7,6 +7,7 @@ from pydantic import BaseModel, model_validator
 from db.supabase import (
     get_job, create_job, get_history,
     get_cached_company, get_job_with_local_fallback,
+    coerce_evidence_objects,
 )
 from pdf.generator import generate_pdf
 
@@ -52,13 +53,11 @@ def _normalise_job(job: dict) -> dict:
             "source":      f.get("source", ""),
         })
 
-    # Evidence is stored in the sources JSONB field as a list of evidence objects
-    evidence = job.get("sources") or []
-    if isinstance(evidence, list) and evidence and isinstance(evidence[0], str):
-        # Old format: sources was a list of URL strings — convert to minimal objects
-        evidence = [{"id": f"E-{i+1:02d}", "kind": "News", "title": url,
-                     "org": "", "date": "", "url": url, "quote": "", "weight": 0.5}
-                    for i, url in enumerate(evidence)]
+    # Evidence is stored in the sources JSONB field as a list of evidence objects.
+    # coerce_evidence_objects handles legacy string arrays and passes object
+    # entries through untouched — including the M5 weight-component fields
+    # (reliability / recency / relevance), which must reach the frontend intact.
+    evidence = coerce_evidence_objects(job.get("sources") or [])
 
     dim = job.get("dimension_scores") or {}
 
@@ -95,6 +94,28 @@ def _normalise_job(job: dict) -> dict:
         "evidence": evidence,
         "sources":  [e["url"] for e in evidence if isinstance(e, dict) and e.get("url")],
     }
+
+
+# ─── NFR-09 relay fallback ────────────────────────────────────────────────────
+# When Supabase is down, the analysis-service cannot persist results and our
+# get_job() returns None — but the service keeps an in-memory copy and serves
+# it at GET /result/{job_id}. Falling back to that relay is what makes
+# "write failure → result still reaches the user via polling" actually true.
+
+def _relay_lookup(job_id: str) -> dict | None:
+    analysis_url = os.environ.get("ANALYSIS_SERVICE_URL", "http://localhost:8001")
+    try:
+        res = httpx.get(f"{analysis_url}/result/{job_id}", timeout=3)
+        res.raise_for_status()
+        record = res.json()
+    except Exception as e:
+        print(f"relay lookup failed for {job_id}: {e}")
+        return None
+    if not isinstance(record, dict) or record.get("status") in (None, "unknown"):
+        return None
+    print(f"relay hit for {job_id} — status={record.get('status')} "
+          f"(served from analysis-service memory, NFR-09)")
+    return record
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
@@ -161,6 +182,10 @@ def get_report(job_id: str):
 
     job = get_job(job_id)
     if not job:
+        # NFR-09: DB unreachable / write never landed — ask the analysis
+        # service's in-memory relay before giving up.
+        job = _relay_lookup(job_id)
+    if not job:
         return {"error": "Job not found"}
     return _normalise_job(job)
 
@@ -171,7 +196,7 @@ def download_pdf(job_id: str):
         company = job_id[6:]
         job = get_job_with_local_fallback(job_id, company)
     else:
-        job = get_job(job_id)
+        job = get_job(job_id) or _relay_lookup(job_id)
 
     if not job or job.get("status") != "completed":
         return {"error": "Report not ready"}

@@ -729,7 +729,7 @@ function Sidebar({ route, onPortfolio, onWatchlist, onReports }) {
       </div>
 
       <div className="side-section side-meta">
-        <div className="side-meta-row mono small"><span className="mute">Engine</span><span>claude-sonnet-4</span></div>
+        <div className="side-meta-row mono small"><span className="mute">Engine</span><span>Gemini / Groq</span></div>
         <div className="side-meta-row mono small"><span className="mute">Rubric</span><span>v3.2 · 5 dim</span></div>
         <div className="side-meta-row mono small"><span className="mute">Last sync</span><span>just now</span></div>
       </div>

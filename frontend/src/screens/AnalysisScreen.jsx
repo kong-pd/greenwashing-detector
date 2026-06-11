@@ -38,7 +38,7 @@ async function pollReport(jobId, signal) {
 //        template (makeLiveClaim) or a Petrovera fixture. Spreading it would
 //        leak Petrovera flags/evidence into real company reports when the API
 //        returns incomplete data. All fields must come from raw or be empty/0.
-function normalise(raw, demoClaim) {
+export function normalise(raw, demoClaim) {
   if (!raw || raw.error) return null;
 
   const dim = raw.dimensionScores || raw.dimension_scores || {};
@@ -79,6 +79,14 @@ function normalise(raw, demoClaim) {
     // flags & evidence — API only; empty if API returns nothing
     flags:    flags,
     evidence: raw.evidence || [],
+
+    // Degraded-source marker (scraping_snippet_fallback): a *completed* job can
+    // carry fail_reason as a data-quality note. Passed through so the Report
+    // screen renders an honest "based on search snippets" banner. This value
+    // sits beside (never replaces) the hard-failure reasons.
+    failReason:    raw.fail_reason || raw.failReason || null,
+    contentSource: (raw.fail_reason || raw.failReason) === "scraping_snippet_fallback"
+                     ? "snippet" : "page",
   };
 }
 
@@ -108,7 +116,7 @@ const SCRAPING_FAIL_COPY = {
   },
 };
 
-function getScrapingCopy(failReason, companyName) {
+export function getScrapingCopy(failReason, companyName) {
   const template = SCRAPING_FAIL_COPY[failReason] || SCRAPING_FAIL_COPY.scraping_failed;
   return {
     title: template.title,
@@ -116,7 +124,7 @@ function getScrapingCopy(failReason, companyName) {
   };
 }
 
-function isScrapingFailure(failReason) {
+export function isScrapingFailure(failReason) {
   return ["scraping_not_found", "scraping_blocked", "scraping_failed"].includes(failReason);
 }
 
@@ -441,7 +449,7 @@ export function AnalysisScreen({ claim, query, onComplete }) {
             <span className="ana-context-ticker mono">MANUAL INPUT</span>
           )}
         </div>
-        <div className="mono small mute">claude-sonnet-4 · rubric v3.2</div>
+        <div className="mono small mute">Gemini / Groq · rubric v3.2</div>
       </div>
 
       <div className="ana-stage">
@@ -469,8 +477,16 @@ export function AnalysisScreen({ claim, query, onComplete }) {
             </div>
             <div className="ana-claim-meta-row">
               <span className="mute">AI engine</span>
-              <span className="mono">claude-sonnet-4</span>
+              <span className="mono">gemini-2.5 → groq-llama</span>
             </div>
+            {apiResult?.contentSource === "snippet" && (
+              <div className="ana-claim-meta-row">
+                <span className="mute">Source</span>
+                <span className="mono" style={{ color: "var(--c-warn, #B0741A)" }}>
+                  search snippets · degraded
+                </span>
+              </div>
+            )}
             <div className="ana-claim-meta-row">
               <span className="mute">Rubric</span>
               <span className="mono">v3.2 · 5 dimensions · 0–100</span>
@@ -490,7 +506,7 @@ export function AnalysisScreen({ claim, query, onComplete }) {
                 <span></span><span></span><span></span>
               </span>
             </h1>
-            <div className="ana-subtle mono">claude-sonnet-4 · rubric v3.2</div>
+            <div className="ana-subtle mono">Gemini / Groq · rubric v3.2</div>
           </div>
 
           <ol className="ana-steps">
@@ -637,9 +653,9 @@ function LiveQueries({ stepIdx, companyName }) {
     `GET  cdp.net/api/v1/responses?company=${name}`,
     `GET  ec.europa.eu/clima/ets/registry/${name}`,
     `GET  sciencebasedtargets.org/companies/${name}`,
-    `GET  newsapi.org/v2/everything?q=${name}+ESG+greenwashing`,
+    `POST google.serper.dev/news   q=${name}+greenwashing+OR+ESG`,
     `GET  ogmpartnership.com/members/${name}`,
-    `POST api.anthropic.com/v1/messages   model=claude-sonnet-4`,
+    `POST generativelanguage.googleapis.com   model=gemini-2.5-flash-lite`,
     `PARSE  claim spans → normalised evidence`,
     `DIFF  scope-1 reported vs EU ETS verified`,
     `RANK  evidence by weight · kind · recency`,

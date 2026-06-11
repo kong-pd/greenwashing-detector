@@ -288,7 +288,7 @@ export function EvidenceRow({ ev, index, onOpen }) {
 }
 
 // ───────────────────────────────────────────────────────────── FlagCard
-export function FlagCard({ flag, idx }) {
+export function FlagCard({ flag, idx, onSourceClick }) {
   const sev = flag.severity || "medium";
   return (
     <div className={"flag-card sv-" + sev}>
@@ -300,9 +300,28 @@ export function FlagCard({ flag, idx }) {
         </span>
       </div>
       <div className="flag-card-desc">{flag.description}</div>
-      <div className="flag-card-src mono">
-        <span className="flag-card-src-lbl">SOURCE</span> {flag.source}
-      </div>
+      {onSourceClick ? (
+        // Auditability: clicking the source line opens the Evidence Drawer at
+        // the matching evidence item (flag → evidence traceability).
+        <button
+          type="button"
+          className="flag-card-src mono"
+          onClick={onSourceClick}
+          title="Open this source in the evidence trail"
+          style={{
+            background: "none", border: "none", padding: 0, cursor: "pointer",
+            textAlign: "left", width: "100%", font: "inherit", color: "inherit",
+            textDecoration: "underline", textDecorationStyle: "dotted",
+            textUnderlineOffset: 3,
+          }}
+        >
+          <span className="flag-card-src-lbl">SOURCE</span> {flag.source} →
+        </button>
+      ) : (
+        <div className="flag-card-src mono">
+          <span className="flag-card-src-lbl">SOURCE</span> {flag.source}
+        </div>
+      )}
     </div>
   );
 }

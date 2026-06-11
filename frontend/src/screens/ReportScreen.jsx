@@ -2,7 +2,7 @@
 // FR-34: §5 Methodology section shows all 5 standards. Standard badges in §2.
 // Fix: rep-masthead wrapper restored; isLive helper for conditional masthead.
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   riskBand, bandColor,
   ScoreDial, DimensionBars, FlagCard, EvidenceRow, ReportSection,
@@ -11,6 +11,33 @@ import {
 } from "../components/SharedComponents.jsx";
 import { GWD_DATA } from "../data.js";
 import { gwdToast } from "../toast.js";
+
+// ── Flag → evidence traceability (auditability) ──────────────────────────────
+// Resolve which evidence item a flag's `source` string refers to, so clicking
+// a flag's SOURCE line opens the Evidence Drawer at that exact item.
+// Matching is fuzzy by design — flag sources are free-text AI strings like
+// "EU ETS Union Registry 2024; Shell Restated Baseline Memorandum 2023" while
+// evidence has structured org/title/url. Token-overlap scoring, best match wins.
+// Exported as a pure function so it is unit-testable.
+export function findEvidenceForFlag(flag, evidence) {
+  const list = Array.isArray(evidence) ? evidence : [];
+  const src = String(flag?.source || "").toLowerCase();
+  if (!src || !list.length) return null;
+
+  const tokens = src.split(/[^a-z0-9]+/).filter(t => t.length >= 3);
+  if (!tokens.length) return null;
+
+  let best = null, bestScore = 0;
+  for (const ev of list) {
+    const hay = `${ev.org || ""} ${ev.title || ""} ${ev.url || ""}`.toLowerCase();
+    let score = 0;
+    for (const t of tokens) if (hay.includes(t)) score += 1;
+    if (score > bestScore) { bestScore = score; best = ev; }
+  }
+  // Require at least two token hits — a single generic word ("report",
+  // "database") must not produce a misleading jump.
+  return bestScore >= 2 ? best : null;
+}
 
 export function ReportScreen({ claim, query, scoreVariant = "arc", onBack, onOpenEvidence }) {
   const [showMeth, setShowMeth] = useState(false);
@@ -92,6 +119,33 @@ export function ReportScreen({ claim, query, scoreVariant = "arc", onBack, onOpe
       {/* ── All content inside centred inner wrapper ── */}
       <div className="rep-inner">
 
+        {/* Degraded-source honesty banner — scraping_snippet_fallback on a
+            completed job means the full ESG page was inaccessible and this
+            analysis is built from search-result snippets only. */}
+        {claim.contentSource === "snippet" && (
+          <div
+            className="rep-degraded-banner"
+            role="status"
+            style={{
+              display: "flex", alignItems: "baseline", gap: 10,
+              padding: "10px 14px", marginBottom: 18,
+              border: "1px solid var(--c-warn, #B0741A)",
+              borderLeftWidth: 4, borderRadius: "0 6px 6px 0",
+              background: "color-mix(in srgb, var(--c-warn, #B0741A) 8%, transparent)",
+              fontSize: 13,
+            }}
+          >
+            <span className="mono small" style={{ color: "var(--c-warn, #B0741A)", fontWeight: 600 }}>
+              DEGRADED SOURCE
+            </span>
+            <span>
+              {claim.headline}&apos;s full ESG page could not be accessed — this analysis
+              is based on search-result snippets. Scores may shift once the full page
+              or a pasted report is analysed.
+            </span>
+          </div>
+        )}
+
         {/* ── Masthead ── */}
         <div className="rep-masthead">
           <div className="rep-mast-kicker mono">
@@ -101,7 +155,7 @@ export function ReportScreen({ claim, query, scoreVariant = "arc", onBack, onOpe
                 <span className="sep">·</span>
                 <span>GreenCheck ESG Engine</span>
                 <span className="sep">·</span>
-                <span>claude-sonnet-4 · rubric v3.2</span>
+                <span>Gemini / Groq · rubric v3.2</span>
               </>
             ) : (
               <>
@@ -215,7 +269,7 @@ export function ReportScreen({ claim, query, scoreVariant = "arc", onBack, onOpe
             <div className="rep-summary-side">
               <div className="rep-byline mono small mute">
                 <div>Prepared by</div>
-                <div className="rep-byline-name">GWD Analyzer · claude-sonnet-4</div>
+                <div className="rep-byline-name">GWD Analyzer · Gemini / Groq</div>
               </div>
               <div className="rep-byline mono small mute">
                 <div>Rubric version</div>
@@ -250,7 +304,22 @@ export function ReportScreen({ claim, query, scoreVariant = "arc", onBack, onOpe
         >
           <div className="rep-flags">
             {(claim.flags ?? []).map((f, i) => (
-              <FlagCard key={i} flag={f} idx={i} />
+              <FlagCard
+                key={i}
+                flag={f}
+                idx={i}
+                onSourceClick={() => {
+                  const match = findEvidenceForFlag(f, claim.evidence);
+                  if (match) {
+                    onOpenEvidence?.(claim, match);
+                  } else if ((claim.evidence ?? []).length) {
+                    onOpenEvidence?.(claim);
+                    gwdToast("No exact evidence match — opening full trail", { kind: "info" });
+                  } else {
+                    gwdToast("No external evidence attached to this report");
+                  }
+                }}
+              />
             ))}
           </div>
         </ReportSection>
@@ -322,8 +391,8 @@ export function ReportScreen({ claim, query, scoreVariant = "arc", onBack, onOpe
         {/* Footer */}
         <footer className="rep-footer">
           <div className="rep-footer-l mono small mute">
-            <div>Greenwashing Detector · ImagineHack 2026 · A Sustainable Tomorrow · Taylor's University</div>
-            <div>AI engine: claude-sonnet-4 · Standards: TCFD · GRI 305 · GRI 2-27 · EU Taxonomy Art. 8 · EU GCD 2024</div>
+            <div>GreenCheck · Greenwashing Detection Engine · Evidence-weighted ESG claim analysis</div>
+            <div>AI engine: Gemini / Groq · Standards: TCFD · GRI 305 · GRI 2-27 · EU Taxonomy Art. 8 · EU GCD 2024</div>
             <div>This report is generated by an AI fact-checking system. Findings are analytical opinions, not legal determinations.</div>
           </div>
           <div className="rep-footer-r mono small mute">
@@ -361,12 +430,21 @@ function ExposureGrid({ claim }) {
 
 // ── Evidence Drawer ───────────────────────────────────────────────────────────
 export function EvidenceDrawer({ claim, ev, onClose }) {
-  if (!claim) return null;
-  const evidence = claim.evidence ?? [];
-  const [selected, setSelected] = useState(ev || evidence[0]);
-  useEffect(() => { setSelected(ev || evidence[0]); }, [claim, ev]);
+  // Hooks must run unconditionally (rules-of-hooks) — the early return sits
+  // below them. `selected` is derived: the user's click sets selectedId; the
+  // `ev` prop (flag → evidence jump) wins until the user picks another item,
+  // because the prop identity changes reset the local choice via the key check.
+  const evidence = claim?.evidence ?? [];
+  const [picked, setPicked] = useState(null);   // { forEv, id } — local choice scoped to current ev prop
+  const localId = picked && picked.forEv === (ev?.id ?? null) ? picked.id : null;
+  const selected =
+    (localId && evidence.find(e => e.id === localId)) ||
+    ev ||
+    evidence[0];
 
-  if (!selected) return null;
+  if (!claim || !selected) return null;
+
+  const selectItem = (e) => setPicked({ forEv: ev?.id ?? null, id: e.id });
 
   return (
     <div className="ev-drawer-wrap">
@@ -390,7 +468,7 @@ export function EvidenceDrawer({ claim, ev, onClose }) {
               <button
                 key={e.id}
                 className={"ev-drawer-list-item" + (e.id === selected.id ? " on" : "")}
-                onClick={() => setSelected(e)}
+                onClick={() => selectItem(e)}
               >
                 <div className="ev-dli-l">
                   <div className="ev-dli-num mono">{String(i + 1).padStart(2, "0")}</div>
@@ -472,24 +550,47 @@ export function EvidenceDrawer({ claim, ev, onClose }) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function WeightBreakdown({ ev }) {
-  const reliability =
+
+// M5: weight breakdown reads the *backend-computed* components when present
+// (reliability / recency / relevance stored on each evidence object by the
+// analysis service). Falls back to a frontend estimate only for legacy data,
+// and says so — each estimated bar is marked "est." for honesty.
+// Exported as a pure function so it is unit-testable.
+export function weightFactors(ev) {
+  const hasISO = typeof ev.date === "string" && /^\d{4}-\d{2}-\d{2}/.test(ev.date);
+
+  const estReliability =
     ev.kind === "Filing" || ev.kind === "Database" ? 0.92 :
     ev.kind === "Document"   ? 0.78 :
     ev.kind === "News"       ? 0.65 :
     ev.kind === "Linguistic" ? 0.55 : 0.7;
-  const recency   = ev.date >= "2026-01-01" ? 0.95 : ev.date >= "2025-01-01" ? 0.78 : 0.55;
-  const relevance = ev.weight;
-  const factors   = [
-    { lbl: "Source reliability", v: reliability },
-    { lbl: "Recency",            v: recency     },
-    { lbl: "Relevance",          v: relevance   },
+  // Lexicographic date compare is only meaningful for ISO dates — "Unknown"
+  // or empty must not be treated as recent ("U" > "2" in ASCII).
+  const estRecency = !hasISO ? 0.5
+    : ev.date >= "2026-01-01" ? 0.95
+    : ev.date >= "2025-01-01" ? 0.78 : 0.55;
+
+  const real = (v) => typeof v === "number" && v >= 0 && v <= 1;
+
+  return [
+    { lbl: "Source reliability", v: real(ev.reliability) ? ev.reliability : estReliability,
+      est: !real(ev.reliability) },
+    { lbl: "Recency",            v: real(ev.recency)     ? ev.recency     : estRecency,
+      est: !real(ev.recency) },
+    { lbl: "Relevance",          v: real(ev.relevance)   ? ev.relevance   : (ev.weight ?? 0.5),
+      est: !real(ev.relevance) },
   ];
+}
+
+function WeightBreakdown({ ev }) {
+  const factors = weightFactors(ev);
   return (
     <div className="weight-bk">
       {factors.map(f => (
         <div key={f.lbl} className="weight-bk-row">
-          <span className="weight-bk-lbl">{f.lbl}</span>
+          <span className="weight-bk-lbl">
+            {f.lbl}{f.est && <span className="mono small mute"> · est.</span>}
+          </span>
           <div className="weight-bk-rail">
             <div className="weight-bk-fill" style={{ width: (f.v * 100) + "%" }}></div>
           </div>

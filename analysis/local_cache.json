@@ -45,9 +45,75 @@
       "CDP Public Database 2024",
       "Reuters 2024-03-14",
       "SBTi Corporate Database"
+    ],
+    "evidence": [
+      {
+        "id": "E-01",
+        "kind": "Filing",
+        "title": "SBTi Corporate Database — Shell entry",
+        "org": "Science Based Targets initiative",
+        "date": "2026-04-02",
+        "url": "https://sciencebasedtargets.org/companies-taking-action",
+        "quote": "Status: Commitment under review since 2023-08-11. No validated near-term or net-zero targets on file.",
+        "reliability": 0.9,
+        "recency": 0.95,
+        "relevance": 0.85,
+        "weight": 0.89
+      },
+      {
+        "id": "E-02",
+        "kind": "Filing",
+        "title": "EU ETS Union Registry — Shell verified emissions 2019–2023",
+        "org": "EU ETS Union Registry",
+        "date": "2024-04-30",
+        "url": "https://climate.ec.europa.eu/eu-action/eu-emissions-trading-system-eu-ets_en",
+        "quote": "Verified Scope 1 installations data shows an 8.5% reduction across Shell's European assets since 2019, against the company's headline claim of 30%.",
+        "reliability": 0.9,
+        "recency": 0.5,
+        "relevance": 0.95,
+        "weight": 0.85
+      },
+      {
+        "id": "E-03",
+        "kind": "News",
+        "title": "Dutch regulator ACM opens inquiry into Shell SAF and carbon-neutral marketing",
+        "org": "Reuters",
+        "date": "2024-03-14",
+        "url": "https://www.reuters.com/sustainability/",
+        "quote": "The Authority for Consumers and Markets opened a formal inquiry into Shell's sustainable aviation fuel marketing claims of a 10% blend rate by 2030.",
+        "reliability": 0.85,
+        "recency": 0.5,
+        "relevance": 0.9,
+        "weight": 0.8
+      },
+      {
+        "id": "E-04",
+        "kind": "Database",
+        "title": "CDP Public Database 2024 — Shell climate disclosure record",
+        "org": "CDP",
+        "date": "2024-11-12",
+        "url": "https://www.cdp.net/en/data",
+        "quote": "Shell's 2024 CDP climate response discloses restated 2019 baseline figures following the Nigerian onshore asset divestment.",
+        "reliability": 0.86,
+        "recency": 0.65,
+        "relevance": 0.78,
+        "weight": 0.8
+      },
+      {
+        "id": "E-05",
+        "kind": "Document",
+        "title": "Shell Sustainability Report 2025",
+        "org": "Shell Global",
+        "date": "2026-03-15",
+        "url": "https://www.shell.com/sustainability",
+        "quote": "We are committed to becoming a net-zero emissions energy business by 2050, in step with society's progress.",
+        "reliability": 0.55,
+        "recency": 0.95,
+        "relevance": 0.7,
+        "weight": 0.65
+      }
     ]
   },
-
   "h&m": {
     "score": 71,
     "risk_level": "High Risk",
@@ -94,9 +160,75 @@
       "Changing Markets Foundation 2021",
       "UK ASA 2023",
       "SBTi Corporate Database"
+    ],
+    "evidence": [
+      {
+        "id": "E-01",
+        "kind": "Filing",
+        "title": "Norwegian Consumer Authority ruling on H&M Conscious Collection",
+        "org": "Norwegian Consumer Authority",
+        "date": "2022-06-15",
+        "url": "https://www.forbrukertilsynet.no/english",
+        "quote": "The environmental claims used to market the Conscious Collection are insufficiently substantiated and likely to mislead consumers.",
+        "reliability": 0.9,
+        "recency": 0.5,
+        "relevance": 0.95,
+        "weight": 0.85
+      },
+      {
+        "id": "E-02",
+        "kind": "Filing",
+        "title": "UK ASA adjudication — H&M environmental advertising",
+        "org": "Advertising Standards Authority",
+        "date": "2023-09-06",
+        "url": "https://www.asa.org.uk/rulings.html",
+        "quote": "Broad claims of 'more sustainable materials' without accessible substantiation breached the advertising code.",
+        "reliability": 0.9,
+        "recency": 0.5,
+        "relevance": 0.88,
+        "weight": 0.85
+      },
+      {
+        "id": "E-03",
+        "kind": "Filing",
+        "title": "SBTi Corporate Database — H&M Group entry",
+        "org": "Science Based Targets initiative",
+        "date": "2026-02-20",
+        "url": "https://sciencebasedtargets.org/companies-taking-action",
+        "quote": "Near-term targets validated; net-zero target submission pending full pathway disclosure.",
+        "reliability": 0.9,
+        "recency": 0.8,
+        "relevance": 0.62,
+        "weight": 0.85
+      },
+      {
+        "id": "E-04",
+        "kind": "News",
+        "title": "Synthetics Anonymous: H&M among brands with unsubstantiated sustainability claims",
+        "org": "Changing Markets Foundation",
+        "date": "2021-06-29",
+        "url": "https://changingmarkets.org/reports/",
+        "quote": "96% of H&M's assessed claims were unsubstantiated or misleading under CMA green claims guidance, the highest share among fashion brands reviewed.",
+        "reliability": 0.6,
+        "recency": 0.5,
+        "relevance": 0.85,
+        "weight": 0.67
+      },
+      {
+        "id": "E-05",
+        "kind": "Document",
+        "title": "H&M Group Sustainability Disclosure 2024",
+        "org": "H&M Group",
+        "date": "2025-03-27",
+        "url": "https://hmgroup.com/sustainability/",
+        "quote": "We aim for 100% recycled or other sustainably sourced materials by 2030.",
+        "reliability": 0.55,
+        "recency": 0.65,
+        "relevance": 0.72,
+        "weight": 0.63
+      }
     ]
   },
-
   "patagonia": {
     "score": 18,
     "risk_level": "Low Risk",
@@ -142,9 +274,62 @@
       "B Corp Profile — Patagonia",
       "SBTi Corporate Database",
       "Patagonia Environmental Responsibility Report 2024"
+    ],
+    "evidence": [
+      {
+        "id": "E-01",
+        "kind": "Filing",
+        "title": "SBTi target dashboard — Patagonia validated 1.5°C-aligned targets",
+        "org": "Science Based Targets initiative",
+        "date": "2025-10-18",
+        "url": "https://sciencebasedtargets.org/companies-taking-action",
+        "quote": "Near-term science-based targets validated as consistent with a 1.5°C pathway, covering Scope 1, 2 and material Scope 3 categories.",
+        "reliability": 0.9,
+        "recency": 0.8,
+        "relevance": 0.88,
+        "weight": 0.87
+      },
+      {
+        "id": "E-02",
+        "kind": "Database",
+        "title": "B Corp Directory — Patagonia certification profile",
+        "org": "B Lab",
+        "date": "2025-12-04",
+        "url": "https://www.bcorporation.net/en-us/find-a-b-corp/company/patagonia-inc/",
+        "quote": "Certified since 2011; overall B Impact Score 151.4, against a 80-point certification threshold and a 50.9 median for ordinary businesses.",
+        "reliability": 0.86,
+        "recency": 0.8,
+        "relevance": 0.9,
+        "weight": 0.86
+      },
+      {
+        "id": "E-03",
+        "kind": "Document",
+        "title": "Patagonia Environmental Responsibility Report 2024",
+        "org": "Patagonia",
+        "date": "2025-04-22",
+        "url": "https://www.patagonia.com/our-footprint/",
+        "quote": "87% of line items disclose factory-level origin; remaining supplier-attribution gaps in the down supply chain are listed as open issues.",
+        "reliability": 0.55,
+        "recency": 0.65,
+        "relevance": 0.8,
+        "weight": 0.65
+      },
+      {
+        "id": "E-04",
+        "kind": "Document",
+        "title": "Our Footprint — Patagonia supply chain disclosure hub",
+        "org": "Patagonia",
+        "date": "2026-01-15",
+        "url": "https://www.patagonia.com/our-footprint/",
+        "quote": "Material-level impact data is published per product, including recycled content shares and Fair Trade Certified sewing volumes.",
+        "reliability": 0.55,
+        "recency": 0.8,
+        "relevance": 0.7,
+        "weight": 0.65
+      }
     ]
   },
-
   "tesla": {
     "score": 44,
     "risk_level": "Medium Risk",
@@ -191,9 +376,75 @@
       "SBTi Corporate Database",
       "Transport & Environment 2024",
       "NHTSA Investigation Records"
+    ],
+    "evidence": [
+      {
+        "id": "E-01",
+        "kind": "Filing",
+        "title": "SBTi Corporate Database — Tesla entry",
+        "org": "Science Based Targets initiative",
+        "date": "2026-03-08",
+        "url": "https://sciencebasedtargets.org/companies-taking-action",
+        "quote": "No commitment or validated targets on file.",
+        "reliability": 0.9,
+        "recency": 0.8,
+        "relevance": 0.85,
+        "weight": 0.86
+      },
+      {
+        "id": "E-02",
+        "kind": "Filing",
+        "title": "NHTSA investigation records — Tesla driver-assistance defect inquiries",
+        "org": "NHTSA",
+        "date": "2024-04-26",
+        "url": "https://www.nhtsa.gov/recalls",
+        "quote": "Open defect investigations and recall remediation oversight concerning Autopilot driver-engagement safeguards.",
+        "reliability": 0.9,
+        "recency": 0.5,
+        "relevance": 0.72,
+        "weight": 0.85
+      },
+      {
+        "id": "E-03",
+        "kind": "Database",
+        "title": "S&P Global ESG Scores — Tesla assessment and S&P 500 ESG Index removal",
+        "org": "S&P Global",
+        "date": "2022-05-18",
+        "url": "https://www.spglobal.com/esg/scores/",
+        "quote": "Tesla was removed from the S&P 500 ESG Index citing the absence of a low-carbon strategy disclosure and codes-of-business-conduct criteria.",
+        "reliability": 0.86,
+        "recency": 0.5,
+        "relevance": 0.9,
+        "weight": 0.8
+      },
+      {
+        "id": "E-04",
+        "kind": "News",
+        "title": "Lifecycle analysis: EV supply-chain emissions accounting gaps",
+        "org": "Transport & Environment",
+        "date": "2024-07-09",
+        "url": "https://www.transportenvironment.org/publications/",
+        "quote": "Manufacturer impact reporting, including Tesla's, omits comparable battery supply-chain emissions baselines, hindering independent verification.",
+        "reliability": 0.6,
+        "recency": 0.65,
+        "relevance": 0.8,
+        "weight": 0.68
+      },
+      {
+        "id": "E-05",
+        "kind": "Document",
+        "title": "Tesla Impact Report 2023",
+        "org": "Tesla",
+        "date": "2024-05-23",
+        "url": "https://www.tesla.com/impact",
+        "quote": "Customers avoided releasing over 20 million metric tons of CO2e in 2023 by driving our vehicles.",
+        "reliability": 0.55,
+        "recency": 0.5,
+        "relevance": 0.75,
+        "weight": 0.61
+      }
     ]
   },
-
   "bp": {
     "score": 74,
     "risk_level": "High Risk",
@@ -240,6 +491,73 @@
       "BP Strategy Update 2023",
       "Carbon Tracker 2023",
       "Carbon Brief 2019"
+    ],
+    "evidence": [
+      {
+        "id": "E-01",
+        "kind": "Filing",
+        "title": "UK ASA Adjudication — BP 'Possibilities Everywhere' campaign",
+        "org": "Advertising Standards Authority",
+        "date": "2019-12-04",
+        "url": "https://www.asa.org.uk/rulings.html",
+        "quote": "Complaints upheld that the advertising gave a misleading impression of the proportion of BP's business in low-carbon energy.",
+        "reliability": 0.9,
+        "recency": 0.5,
+        "relevance": 0.9,
+        "weight": 0.85
+      },
+      {
+        "id": "E-02",
+        "kind": "News",
+        "title": "BP scales back emissions-reduction pledge in strategy reset",
+        "org": "Reuters",
+        "date": "2023-02-07",
+        "url": "https://www.reuters.com/business/energy/",
+        "quote": "BP cut its 2030 emissions-reduction target from 35-40% to 20-30% while extending planned oil and gas output.",
+        "reliability": 0.85,
+        "recency": 0.5,
+        "relevance": 0.92,
+        "weight": 0.8
+      },
+      {
+        "id": "E-03",
+        "kind": "News",
+        "title": "Analysis: BP's spending plans versus 'beyond petroleum' narrative",
+        "org": "Carbon Tracker",
+        "date": "2023-03-21",
+        "url": "https://carbontracker.org/reports/",
+        "quote": "Capital allocation remains weighted towards upstream hydrocarbons relative to transition businesses, inconsistent with the net-zero narrative.",
+        "reliability": 0.6,
+        "recency": 0.5,
+        "relevance": 0.85,
+        "weight": 0.67
+      },
+      {
+        "id": "E-04",
+        "kind": "News",
+        "title": "Factcheck: BP advertising and lobbying record on climate",
+        "org": "Carbon Brief",
+        "date": "2019-10-15",
+        "url": "https://www.carbonbrief.org/",
+        "quote": "Analysis of BP's public messaging found low-carbon themes dominate advertising despite over 96% of capex remaining in oil and gas.",
+        "reliability": 0.6,
+        "recency": 0.5,
+        "relevance": 0.78,
+        "weight": 0.64
+      },
+      {
+        "id": "E-05",
+        "kind": "Document",
+        "title": "BP Net Zero Ambition Report 2020",
+        "org": "BP",
+        "date": "2020-02-12",
+        "url": "https://www.bp.com/en/global/corporate/sustainability.html",
+        "quote": "Our ambition is to be a net zero company by 2050 or sooner, and to help the world get to net zero.",
+        "reliability": 0.55,
+        "recency": 0.5,
+        "relevance": 0.68,
+        "weight": 0.59
+      }
     ]
   }
 }
