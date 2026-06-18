@@ -1,6 +1,7 @@
 // SharedComponents.jsx — shared visual atoms for the Greenwashing Detector.
 // FR-34: Each scoring dimension now displays its regulatory standard badge.
 import { useState, useEffect, useRef, useMemo } from "react";
+import { toHref } from "../utils.js";
 
 // ───────────────────────────────────────────────────────────── helpers
 export function riskBand(score) {
@@ -259,9 +260,21 @@ export function DimensionBars({ scores, max = 20, dense = false }) {
 // ───────────────────────────────────────────────────────────── EvidenceRow
 export function EvidenceRow({ ev, index, onOpen }) {
   const w = Math.round(ev.weight * 100);
+  const href = toHref(ev.url);
+  const num = String(index + 1).padStart(2, "0");
   return (
     <div className="ev-row" onClick={() => onOpen?.(ev)}>
-      <div className="ev-num mono">{String(index + 1).padStart(2, "0")}</div>
+      {href
+        ? <a
+            className="ev-num mono"
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open source ↗"
+            aria-label={`Open source for evidence ${num}${ev.org ? " · " + ev.org : ""}`}
+            onClick={(e) => e.stopPropagation()}
+          >{num}</a>
+        : <div className="ev-num mono is-internal" title="Internal analysis — no external source">{num}</div>}
       <div className="ev-body">
         <div className="ev-head">
           <span className={"ev-kind k-" + ev.kind.toLowerCase()}>{ev.kind}</span>
@@ -273,7 +286,15 @@ export function EvidenceRow({ ev, index, onOpen }) {
           <span className="sep">·</span>
           <span>{ev.date}</span>
           <span className="sep">·</span>
-          <span className="ev-url">{ev.url}</span>
+          {href
+            ? <a
+                className="ev-url"
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+              >{ev.url}</a>
+            : <span className="ev-url is-internal">internal analysis</span>}
         </div>
       </div>
       <div className="ev-weight">
