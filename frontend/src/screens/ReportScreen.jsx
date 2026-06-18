@@ -11,6 +11,7 @@ import {
 } from "../components/SharedComponents.jsx";
 import { GWD_DATA } from "../data.js";
 import { gwdToast } from "../toast.js";
+import { toHref } from "../utils.js";
 
 // ── Flag → evidence traceability (auditability) ──────────────────────────────
 // Resolve which evidence item a flag's `source` string refers to, so clicking
@@ -43,6 +44,13 @@ export function ReportScreen({ claim, query, scoreVariant = "arc", onBack, onOpe
   const [showMeth, setShowMeth] = useState(false);
   const band = riskBand(claim.score);
   const c    = GWD_DATA.COMPANY;
+
+  // Evidence backing the summary: explicit claim.summaryRefs if authored,
+  // otherwise derived from the evidence each flag resolves to (auditable).
+  const evidence = claim.evidence ?? [];
+  const summaryCites = claim.summaryRefs?.length
+    ? claim.summaryRefs.map(id => evidence.find(e => e.id === id)).filter(Boolean)
+    : [...new Set((claim.flags ?? []).map(f => findEvidenceForFlag(f, evidence)).filter(Boolean))];
 
   // True when the claim came from a live external search (not Petrovera portfolio)
   const isLive = claim.id === "LIVE" || !String(claim.id ?? "").startsWith("CLM-");
@@ -266,6 +274,14 @@ export function ReportScreen({ claim, query, scoreVariant = "arc", onBack, onOpe
             <p className="rep-summary-lede">
               {claim.summary || "Analysis in progress — summary will appear here."}
             </p>
+            {summaryCites.length > 0 && (
+              <div className="rep-cite-row">
+                <span className="rep-cite-lbl mono">BACKED BY</span>
+                {summaryCites.map(ev => (
+                  <Cite key={ev.id} claim={claim} ev={ev} onOpenEvidence={onOpenEvidence} />
+                ))}
+              </div>
+            )}
             <div className="rep-summary-side">
               <div className="rep-byline mono small mute">
                 <div>Prepared by</div>
@@ -303,24 +319,33 @@ export function ReportScreen({ claim, query, scoreVariant = "arc", onBack, onOpe
           right={<span className="mono small mute">one per top-scoring dimension</span>}
         >
           <div className="rep-flags">
-            {(claim.flags ?? []).map((f, i) => (
-              <FlagCard
-                key={i}
-                flag={f}
-                idx={i}
-                onSourceClick={() => {
-                  const match = findEvidenceForFlag(f, claim.evidence);
-                  if (match) {
-                    onOpenEvidence?.(claim, match);
-                  } else if ((claim.evidence ?? []).length) {
-                    onOpenEvidence?.(claim);
-                    gwdToast("No exact evidence match — opening full trail", { kind: "info" });
-                  } else {
-                    gwdToast("No external evidence attached to this report");
-                  }
-                }}
-              />
-            ))}
+            {(claim.flags ?? []).map((f, i) => {
+              const match = findEvidenceForFlag(f, evidence);
+              return (
+                <div key={i} className="rep-flag-item">
+                  <FlagCard
+                    flag={f}
+                    idx={i}
+                    onSourceClick={() => {
+                      if (match) {
+                        onOpenEvidence?.(claim, match);
+                      } else if (evidence.length) {
+                        onOpenEvidence?.(claim);
+                        gwdToast("No exact evidence match — opening full trail", { kind: "info" });
+                      } else {
+                        gwdToast("No external evidence attached to this report");
+                      }
+                    }}
+                  />
+                  {match && (
+                    <div className="rep-cite-row rep-cite-row-tight">
+                      <span className="rep-cite-lbl mono">SOURCE</span>
+                      <Cite claim={claim} ev={match} onOpenEvidence={onOpenEvidence} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </ReportSection>
 
@@ -407,6 +432,60 @@ export function ReportScreen({ claim, query, scoreVariant = "arc", onBack, onOpe
 }
 
 // ── 5-cell exposure grid ──────────────────────────────────────────────────────
+// Inline citation chip: a numbered "[n]" that opens the Evidence Drawer at
+// this exact source, matching the number in the evidence trail. Keyboard-ok.
+function Cite({ claim, ev, evId, onOpenEvidence }) {
+  const list = claim.evidence ?? [];
+  const item = ev ?? list.find(e => e.id === evId);
+  const [card, setCard] = useState(null); // { x, y, below } | null
+  if (!item) return null;
+  const n = list.indexOf(item) + 1;
+  const open = () => onOpenEvidence?.(claim, item);
+
+  // Position a fixed preview card from the chip’s rect; flip below when near top.
+  const show = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const below = r.top < 220;
+    const x = Math.min(Math.max(r.left + r.width / 2, 168), window.innerWidth - 168);
+    setCard({ x, y: below ? r.bottom + 8 : r.top - 8, below });
+  };
+  const hide = () => setCard(null);
+
+  return (
+    <>
+      <span
+        className="ev-cite"
+        role="button"
+        tabIndex={0}
+        onClick={open}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }}
+      >
+        {n}
+      </span>
+      {card && (
+        <div
+          className="ev-cite-card"
+          role="tooltip"
+          style={{ left: card.x, top: card.y, transform: `translate(-50%, ${card.below ? "0" : "-100%"})` }}
+        >
+          <div className="ev-cite-card-head">
+            <span className={"ev-dli-kind k-" + item.kind.toLowerCase()}>{item.kind}</span>
+            <span className="mono small mute">{item.id}</span>
+          </div>
+          <div className="ev-cite-card-title">{item.title}</div>
+          <div className="ev-cite-card-meta mono">{item.org} · {item.date}</div>
+          <div className="ev-cite-card-quote">“{item.quote}”</div>
+          <div className="ev-cite-card-foot mono">CLICK TO OPEN SOURCE →</div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function ExposureGrid({ claim }) {
   const cells = DIMENSION_META.map(d => {
     const v    = (claim.dimensionScores ?? {})[d.key] || 0;
@@ -443,6 +522,8 @@ export function EvidenceDrawer({ claim, ev, onClose }) {
     evidence[0];
 
   if (!claim || !selected) return null;
+
+  const href = toHref(selected.url);
 
   const selectItem = (e) => setPicked({ forEv: ev?.id ?? null, id: e.id });
 
@@ -510,7 +591,9 @@ export function EvidenceDrawer({ claim, ev, onClose }) {
             <div className="ev-detail-grid">
               <div className="ev-detail-cell">
                 <div className="mono small mute">SOURCE URL</div>
-                <div className="mono">{selected.url}</div>
+                {href
+                  ? <a className="mono ev-detail-url" href={href} target="_blank" rel="noopener noreferrer">{selected.url}</a>
+                  : <div className="mono mute">internal analysis — no external source</div>}
               </div>
               <div className="ev-detail-cell">
                 <div className="mono small mute">WEIGHT BREAKDOWN</div>
@@ -527,12 +610,15 @@ export function EvidenceDrawer({ claim, ev, onClose }) {
             </div>
 
             <footer className="ev-detail-actions">
-              <button className="rep-action" onClick={() => gwdToast("Opening source · " + selected.url)}>
+              <button className="rep-action" onClick={() => {
+                if (href) window.open(href, "_blank", "noopener,noreferrer");
+                else gwdToast("Internal analyzer evidence — no external source to open");
+              }}>
                 Open source ↗
               </button>
               <button className="rep-action" onClick={() => {
                 navigator.clipboard?.writeText(
-                  `${selected.title} (${selected.org}, ${selected.date}). ${selected.url}`
+                  `${selected.title} (${selected.org}, ${selected.date}). ${href || selected.url}`
                 );
                 gwdToast("Source citation copied", { kind: "ok" });
               }}>
