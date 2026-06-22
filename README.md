@@ -12,7 +12,10 @@ Built as a general-purpose compliance scoring engine; ESG is the current config.
 
 **Demo:** https://greenwashing-detector.vercel.app  
 _(Backend on Railway — hibernates on inactivity, cold start ~60s. Frontend and pre-cached companies work either way.)_
-![GreenCheck landing page](docs/loading_page.png)
+![Loading page](docs/Screenshots/loading_page.png)
+![Report overview](docs/Screenshots/ReportPage1.png)
+![Evidence drawer](docs/Screenshots/ReportPage7.png)
+![Methodology](docs/Screenshots/ReportPage8.png)
 
 ---
 
