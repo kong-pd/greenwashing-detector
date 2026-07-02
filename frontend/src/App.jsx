@@ -1020,6 +1020,7 @@ export default function App() {
               claim={route.claim}
               query={route.query}
               onComplete={result => goReport(result ?? route.claim, route.query)}
+              onBack={goSearch}
             />
           )}
           {route.name === "report" && (

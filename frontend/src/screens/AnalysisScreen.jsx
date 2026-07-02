@@ -128,6 +128,35 @@ export function isScrapingFailure(failReason) {
   return ["scraping_not_found", "scraping_blocked", "scraping_failed"].includes(failReason);
 }
 
+// ─── C-1: Analysis error copy ────────────────────────────────────────────────
+// Non-scraping terminal failures (backend unreachable / pipeline error).
+// These render the honest error card instead of the old behaviour of
+// silently completing into a demo-data report.
+
+const ANALYSIS_ERROR_COPY = {
+  service_unreachable: {
+    kicker: "SERVICE UNREACHABLE",
+    title:  "Analysis service unreachable",
+    body:   "We couldn't reach the analysis backend, so {company} was not analysed. On the hosted demo this usually means the Railway instance is cold-starting (~60 s) — try again in a moment.",
+  },
+  analysis_failed: {
+    kicker: "ANALYSIS FAILED",
+    title:  "Analysis failed",
+    body:   "The pipeline reported an error while analysing {company}. No partial or demo result is shown — you can retry, or go back and try another company.",
+  },
+};
+
+export function getAnalysisErrorCopy(error, companyName) {
+  const template =
+    ANALYSIS_ERROR_COPY[error?.kind] || ANALYSIS_ERROR_COPY.analysis_failed;
+  return {
+    kicker: template.kicker,
+    title:  template.title,
+    body:   template.body.replace("{company}", companyName),
+    detail: error?.detail || null,
+  };
+}
+
 // ─── FR-04 Manual Input Fallback ───────────────────────────────────────────
 // failReason prop drives the banner text so users get a contextual message.
 
@@ -231,7 +260,7 @@ function ManualInputFallback({ companyName, failReason, onSubmit, onRetry }) {
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
-export function AnalysisScreen({ claim, query, onComplete }) {
+export function AnalysisScreen({ claim, query, onComplete, onBack }) {
   const steps = GWD_DATA.PIPELINE_STEPS;
 
   const [stepIdx,        setStepIdx]        = useState(0);
@@ -258,13 +287,16 @@ export function AnalysisScreen({ claim, query, onComplete }) {
 
   // ── 1. Pipeline animation ────────────────────────────────────────────────
   useEffect(() => {
-    if (finished.current || scrapingFailReason) return;
+    if (finished.current || scrapingFailReason || apiError) return;
     const timings = [900, 1100, 1500, 1700, 1200];
     if (stepIdx >= steps.length) {
       pipelineDone.current = true;
-      if (apiResult !== null || apiError !== null) {
+      // C-1: only a REAL result may complete this screen. Errors and
+      // timeouts hold here — their cards offer retry / back, never a
+      // demo-data report.
+      if (apiResult !== null) {
         finished.current = true;
-        const t = setTimeout(() => onComplete?.(apiResult ?? claim), 700);
+        const t = setTimeout(() => onComplete?.(apiResult), 700);
         return () => clearTimeout(t);
       }
       return;
@@ -346,12 +378,9 @@ export function AnalysisScreen({ claim, query, onComplete }) {
               // FR-04: show manual input with contextual message
               setScrapingFailReason(reason);
             } else {
-              // Non-scraping failure or already tried manual — use demo data
-              setApiResult(claim);
-              if (pipelineDone.current && !finished.current) {
-                finished.current = true;
-                setTimeout(() => onComplete?.(claim), 700);
-              }
+              // C-1: non-scraping failure (or a manual retry that failed
+              // again) — surface it. Never substitute demo data for a verdict.
+              setApiError({ kind: "analysis_failed", detail: reason });
             }
             return;
           }
@@ -359,11 +388,9 @@ export function AnalysisScreen({ claim, query, onComplete }) {
 
         // US-07: Timeout
         if (!ac.signal.aborted) {
+          // C-1: the timeout card (with its own Retry) is the terminal
+          // state — no auto-completion into demo data after 1.5 s.
           setTimedOut(true);
-          if (pipelineDone.current && !finished.current) {
-            finished.current = true;
-            setTimeout(() => onComplete?.(claim), 1500);
-          }
         }
 
       } catch (err) {
@@ -372,15 +399,13 @@ export function AnalysisScreen({ claim, query, onComplete }) {
           err.message.includes("404") ||
           err.message.includes("Failed to fetch") ||
           err.message.includes("NetworkError");
-        if (isUnavailable) {
-          setApiResult(claim);
-        } else {
-          setApiError(err.message);
-        }
-        if (pipelineDone.current && !finished.current) {
-          finished.current = true;
-          setTimeout(() => onComplete?.(claim), 700);
-        }
+        // C-1: both branches land on the honest error card. The old code
+        // silently completed into a demo-data report from here.
+        setApiError(
+          isUnavailable
+            ? { kind: "service_unreachable" }
+            : { kind: "analysis_failed", detail: err.message }
+        );
       }
     }
     run();
@@ -411,7 +436,61 @@ export function AnalysisScreen({ claim, query, onComplete }) {
     setRetryCount(n => n + 1);
   }
 
+  // C-1: shared restart for the timeout card and the error card.
+  // Keeps manualContent — retrying a failed manual run resubmits the same text.
+  function handleRetryAnalysis() {
+    finished.current     = false;
+    pipelineDone.current = false;
+    setTimedOut(false);
+    setApiError(null);
+    setStepIdx(0);
+    setDoneSteps(new Set());
+    setRetryCount(n => n + 1);
+  }
+
   const allDone = stepIdx >= steps.length;
+
+  // ── C-1: honest error state ────────────────────────────────────────────────
+  // Backend unreachable or a non-scraping pipeline failure. Nothing was
+  // analysed, so nothing report-shaped is rendered — retry or leave.
+  if (apiError) {
+    const copy = getAnalysisErrorCopy(apiError, displayName);
+    return (
+      <div className="analysis-screen">
+        <div className="ana-context-bar">
+          <div className="ana-context-l">
+            <span className="mono small mute">{copy.kicker}</span>
+            <span className="ana-context-co">{displayName}</span>
+          </div>
+          <div className="mono small mute">Live analysis · halted</div>
+        </div>
+        <div className="fallback-wrap">
+          <div className="fallback-card">
+            <div className="fallback-banner">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.3"/>
+                <path d="M8 5v3.5M8 10v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+              <span><strong>{copy.title} — </strong>{copy.body}</span>
+            </div>
+            {copy.detail && (
+              <div className="mono small mute" style={{ padding: "0 4px" }}>
+                pipeline said: {copy.detail}
+              </div>
+            )}
+            <div className="fallback-actions">
+              <button className="rep-action ghost" onClick={onBack}>
+                ← Back to search
+              </button>
+              <button className="rep-action" onClick={handleRetryAnalysis}>
+                Try again →
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── FR-04: Render manual input fallback with contextual message ───────────
   if (scrapingFailReason) {
@@ -567,23 +646,9 @@ export function AnalysisScreen({ claim, query, onComplete }) {
                 </svg>
                 Analysis is taking longer than expected
               </div>
-              <button className="rep-action small"
-                onClick={() => {
-                  setTimedOut(false);
-                  finished.current     = false;
-                  pipelineDone.current = false;
-                  setStepIdx(0);
-                  setDoneSteps(new Set());
-                  setRetryCount(n => n + 1);
-                }}>
+              <button className="rep-action small" onClick={handleRetryAnalysis}>
                 Retry →
               </button>
-            </div>
-          )}
-
-          {apiError && !timedOut && (
-            <div className="ana-api-status mono small mute">
-              API unavailable · using demo data
             </div>
           )}
         </main>
