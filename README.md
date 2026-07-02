@@ -130,6 +130,25 @@ cd frontend && npm run dev   # → localhost:5173
 
 ---
 
+## Testing
+
+Three layers, all free of live API calls:
+
+```bash
+# Unit + integration (106 tests)
+pytest backend/tests/ -v          # web-service: routes, normaliser, relay fallback
+pytest analysis/tests/ -v         # pipeline: analyzer chain, weights, snippet fallback
+cd frontend && npm test           # vitest: API contracts, source links
+
+# Browser E2E (5 journeys, ~50s)
+cd e2e && npm ci && npx playwright install chromium
+npx playwright test
+```
+
+The E2E suite boots the real three-service topology (Chromium → Vite → web-service → analysis-service) and drives it like a user: search a cached company, hit a scraping failure, recover through manual input, open the evidence drawer. It is hermetic by construction — the same degradation ladder the app ships for resilience is what makes the tests deterministic: `USE_MOCK` short-circuits the AI chain, an empty Serper key makes the scraper fail with zero network, and pointing `SUPABASE_URL` at a closed local port forces every result through the NFR-09 in-memory relay. Every fallback layer asserted is a production feature, not test scaffolding. Runs in CI on every push (`.github/workflows/e2e.yml`), no secrets required.
+
+---
+
 ## Things that will bite you
 
 **Railway hibernation** — services freeze after ~30min inactivity. First request on a cold instance takes up to 60s. Nothing to do on the code side; just worth knowing before a demo.
@@ -177,6 +196,10 @@ analysis/
 frontend/src/
   screens/AnalysisScreen.jsx    polling state machine + manual input fallback
   screens/ReportScreen.jsx      five-section report + evidence drawer
+
+e2e/
+  playwright.config.js  boots all three services with a hermetic offline env
+  tests/                five browser journeys (cache hit, failure→recovery, …)
 
 database/
   schema.sql            fresh setup
