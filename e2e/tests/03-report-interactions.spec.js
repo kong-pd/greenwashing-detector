@@ -25,14 +25,12 @@ test("evidence drawer opens with all sources and closes", async ({ page }) => {
   await expect(drawer).toBeHidden();
 });
 
-test("back navigation walks the breadcrumb up, then top-nav returns to search", async ({ page }) => {
-  // ← follows the breadcrumb (Reports / Shell / LIVE) one level up to the
-  // Reports history list — not straight to the landing page.
+test("a search-born report goes back to a fresh search (origin-aware ←)", async ({ page }) => {
+  // P3-12 (C-5): the breadcrumb root and the ← button remember the origin.
+  // This report came from a landing search, so both say "Search" and back
+  // lands on a fresh landing page — not on the Reports list.
+  await expect(page.locator(".rep-back")).toContainText("Search");
   await page.locator(".rep-back").click();
-  await expect(page.getByRole("heading", { name: "Analysis History" })).toBeVisible();
-
-  // Top-nav "Search" is the way back to a fresh landing search.
-  await page.getByRole("navigation").getByRole("button", { name: "Search" }).click();
   await expect(page.getByPlaceholder(SEARCH_PLACEHOLDER)).toBeVisible();
   await expect(page.getByPlaceholder(SEARCH_PLACEHOLDER)).toHaveValue("");
 });
