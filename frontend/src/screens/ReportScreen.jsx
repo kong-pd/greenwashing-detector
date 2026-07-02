@@ -1,15 +1,14 @@
 // ReportScreen.jsx — the hero output: a credibility report on a single claim.
 // FR-34: §5 Methodology section shows all 5 standards. Standard badges in §2.
-// Fix: rep-masthead wrapper restored; isLive helper for conditional masthead.
+// P2-5: every claim is live — the Petrovera masthead branch is gone.
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   riskBand, bandColor,
   ScoreDial, DimensionBars, FlagCard, EvidenceRow, ReportSection,
   StandardBadge, MethodologyPanel,
   DIMENSION_META,
 } from "../components/SharedComponents.jsx";
-import { GWD_DATA } from "../data.js";
 import { gwdToast } from "../toast.js";
 import { toHref } from "../utils.js";
 
@@ -40,10 +39,9 @@ export function findEvidenceForFlag(flag, evidence) {
   return bestScore >= 2 ? best : null;
 }
 
-export function ReportScreen({ claim, query, scoreVariant = "arc", onBack, onOpenEvidence }) {
+export function ReportScreen({ claim, query, origin = "search", scoreVariant = "arc", onBack, onOpenEvidence }) {
   const [showMeth, setShowMeth] = useState(false);
   const band = riskBand(claim.score);
-  const c    = GWD_DATA.COMPANY;
 
   // Evidence backing the summary: explicit claim.summaryRefs if authored,
   // otherwise derived from the evidence each flag resolves to (auditable).
@@ -52,15 +50,18 @@ export function ReportScreen({ claim, query, scoreVariant = "arc", onBack, onOpe
     ? claim.summaryRefs.map(id => evidence.find(e => e.id === id)).filter(Boolean)
     : [...new Set((claim.flags ?? []).map(f => findEvidenceForFlag(f, evidence)).filter(Boolean))];
 
-  // True when the claim came from a live external search (not Petrovera portfolio)
-  const isLive = claim.id === "LIVE" || !String(claim.id ?? "").startsWith("CLM-");
-
   function handleExportPDF() {
-    const prev = document.title;
-    document.title = `${isLive ? claim.headline : c.ticker}_${claim.id}_credibility_report`;
-    window.print();
-    document.title = prev;
-    gwdToast("Print dialog opened — save as PDF", { kind: "ok", icon: "↓" });
+    // P3-11: print CSS hides the collapsed §5 stub, so the full rubric must
+    // be mounted before the dialog opens — otherwise the printed report
+    // ships with an empty Methodology section.
+    setShowMeth(true);
+    requestAnimationFrame(() => {
+      const prev = document.title;
+      document.title = `${claim.headline}_${claim.id}_credibility_report`;
+      window.print();
+      document.title = prev;
+      gwdToast("Print dialog opened — save as PDF", { kind: "ok", icon: "↓" });
+    });
   }
 
   return (
@@ -75,10 +76,10 @@ export function ReportScreen({ claim, query, scoreVariant = "arc", onBack, onOpe
                 <path d="M10 2 L4 8 L10 14" stroke="currentColor" strokeWidth="1.6"
                       fill="none" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              Reports
+              {origin === "reports" ? "Reports" : "Search"}
             </button>
             <span className="rep-crumb-sep">/</span>
-            <span className="rep-crumb-co mono">{isLive ? claim.headline : c.ticker}</span>
+            <span className="rep-crumb-co mono">{claim.headline}</span>
             <span className="rep-crumb-sep">/</span>
             <span className="rep-crumb-id mono">{claim.id}</span>
             {query && (
@@ -157,41 +158,21 @@ export function ReportScreen({ claim, query, scoreVariant = "arc", onBack, onOpe
         {/* ── Masthead ── */}
         <div className="rep-masthead">
           <div className="rep-mast-kicker mono">
-            {isLive ? (
-              <>
-                <span>LIVE ANALYSIS</span>
-                <span className="sep">·</span>
-                <span>GreenCheck ESG Engine</span>
-                <span className="sep">·</span>
-                <span>Gemini / Groq · rubric v3.2</span>
-              </>
-            ) : (
-              <>
-                <span>{c.legalName.toUpperCase()}</span>
-                <span className="sep">·</span>
-                <span>{c.exchange}: {c.ticker}</span>
-                <span className="sep">·</span>
-                <span>{c.sector}</span>
-              </>
-            )}
+            <span>LIVE ANALYSIS</span>
+            <span className="sep">·</span>
+            <span>GreenCheck ESG Engine</span>
+            <span className="sep">·</span>
+            <span>Gemini / Groq · rubric v3.2</span>
           </div>
 
           <h1 className="rep-mast-title">{claim.headline}</h1>
 
           <div className="rep-mast-lede">
             <blockquote>
-              {isLive ? (
-                <span>{claim.headline} — AI greenwashing risk analysis</span>
-              ) : (
-                <>
-                  <span className="rep-mast-quotemark">"</span>
-                  {claim.shortQuote}
-                  <span className="rep-mast-quotemark">"</span>
-                </>
-              )}
+              <span>{claim.headline} — AI greenwashing risk analysis</span>
             </blockquote>
             <div className="rep-mast-attr mono">
-              — {isLive ? "GreenCheck live analysis" : claim.source}
+              — GreenCheck live analysis
             </div>
           </div>
         </div>{/* /rep-masthead */}
@@ -509,6 +490,13 @@ function ExposureGrid({ claim }) {
 
 // ── Evidence Drawer ───────────────────────────────────────────────────────────
 export function EvidenceDrawer({ claim, ev, onClose }) {
+  // P3-14: Escape closes the drawer, matching backdrop click and the ✕.
+  useEffect(() => {
+    const onKey = e => { if (e.key === "Escape") onClose?.(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   // Hooks must run unconditionally (rules-of-hooks) — the early return sits
   // below them. `selected` is derived: the user's click sets selectedId; the
   // `ev` prop (flag → evidence jump) wins until the user picks another item,
@@ -623,9 +611,6 @@ export function EvidenceDrawer({ claim, ev, onClose }) {
                 gwdToast("Source citation copied", { kind: "ok" });
               }}>
                 Cite this source
-              </button>
-              <button className="rep-action ghost" onClick={() => gwdToast("Thanks — flagged for analyst review")}>
-                Flag as misranked
               </button>
             </footer>
           </section>

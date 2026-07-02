@@ -76,4 +76,10 @@ test("opening a history row renders the full report, not a thin shell", async ({
     .toContainText("MOCK MODE");                                       // not the placeholder
   await expect(page.getByText(/\[MOCK\] Company claims a 15% reduction/))
     .toBeVisible();                                                    // §3 findings present
+
+  // P3-12 (C-5): this report was opened FROM the Reports list, so the
+  // breadcrumb root says "Reports" and ← returns there.
+  await expect(page.locator(".rep-back")).toContainText("Reports");
+  await page.locator(".rep-back").click();
+  await expect(page.getByRole("heading", { name: "Analysis History" })).toBeVisible();
 });

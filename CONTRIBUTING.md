@@ -176,4 +176,4 @@ git push origin feat/your-branch
 | News evidence pipeline | `analysis/enricher.py` |
 | Local cache (demo companies) | `analysis/local_cache.json` |
 | Database operations | `backend/db/supabase.py` |
-| Demo portfolio data | `frontend/src/data.js` (Petrovera only) |
+| Pipeline step metadata | `frontend/src/data.js` (PIPELINE_STEPS — the demo portfolio was removed in P2-5) |

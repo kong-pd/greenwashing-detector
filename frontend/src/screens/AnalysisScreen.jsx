@@ -277,7 +277,10 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
 
   // FR-04: scraping failure state — now tracks the specific fail reason
   const [scrapingFailReason, setScrapingFailReason] = useState(null); // null = no failure
-  const [manualContent,      setManualContent]      = useState(null);
+  // P2-6: the Claim and Report-PDF tabs pre-supply content via
+  // claim._manualContent — the pipeline then skips scraping entirely.
+  // (Previously this field was attached upstream and silently dropped.)
+  const [manualContent,      setManualContent]      = useState(claim?._manualContent ?? null);
 
   const finished     = useRef(false);
   const pipelineDone = useRef(false);
