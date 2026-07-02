@@ -221,6 +221,23 @@ def get_job_with_local_fallback(job_id: str, company_name: str) -> dict | None:
     return None
 
 
+def history_row(row: dict) -> dict:
+    """Public shape for one history entry.
+
+    The API speaks `job_id` everywhere (POST /analyze response, GET
+    /report/{job_id}) — the raw DB column `id` never leaves this layer.
+    Regression guard for audit C-2, where the UI read job_id while the
+    endpoint sent id and every Reports row rendered 'undefined'.
+    """
+    return {
+        "job_id":       row.get("id"),
+        "company_name": row.get("company_name"),
+        "score":        row.get("score"),
+        "risk_level":   row.get("risk_level"),
+        "completed_at": row.get("completed_at"),
+    }
+
+
 def get_history() -> list[dict]:
     try:
         res = (
@@ -232,7 +249,7 @@ def get_history() -> list[dict]:
             .limit(10)
             .execute()
         )
-        return res.data or []
+        return [history_row(r) for r in (res.data or [])]
     except Exception as e:
         print(f"get_history failed: {e}")
         return []
