@@ -1,7 +1,7 @@
 // Contract tests for the pure functions the API boundary depends on.
 // Runs in node (no DOM): importing the screens only evaluates module scope.
 import { describe, it, expect } from "vitest";
-import { normalise, getScrapingCopy, isScrapingFailure }
+import { normalise, getScrapingCopy, isScrapingFailure, getAnalysisErrorCopy }
   from "../screens/AnalysisScreen.jsx";
 import { weightFactors, findEvidenceForFlag }
   from "../screens/ReportScreen.jsx";
@@ -131,5 +131,31 @@ describe("scraping failure helpers", () => {
     expect(isScrapingFailure("scraping_blocked")).toBe(true);
     expect(isScrapingFailure("scraping_not_found")).toBe(true);
     expect(isScrapingFailure("scraping_snippet_fallback")).toBe(false);
+  });
+});
+
+// ── C-1: getAnalysisErrorCopy ───────────────────────────────────────────────
+
+describe("getAnalysisErrorCopy (C-1: failures are honest, never demo data)", () => {
+  it("names the unreachable-service state and the company", () => {
+    const c = getAnalysisErrorCopy({ kind: "service_unreachable" }, "Acme");
+    expect(c.kicker).toBe("SERVICE UNREACHABLE");
+    expect(c.body).toContain("Acme");
+    expect(c.body).toContain("was not analysed");
+    expect(c.detail).toBeNull();
+  });
+
+  it("carries the pipeline fail_reason as detail", () => {
+    const c = getAnalysisErrorCopy(
+      { kind: "analysis_failed", detail: "analysis_failed" }, "Acme");
+    expect(c.kicker).toBe("ANALYSIS FAILED");
+    expect(c.detail).toBe("analysis_failed");
+    expect(c.body).toContain("No partial or demo result");
+  });
+
+  it("unknown kinds fall back to the generic failure copy", () => {
+    const c = getAnalysisErrorCopy({ kind: "someday_new_kind" }, "Acme");
+    expect(c.kicker).toBe("ANALYSIS FAILED");
+    expect(c.body).toContain("Acme");
   });
 });

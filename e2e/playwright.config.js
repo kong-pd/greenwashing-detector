@@ -86,7 +86,10 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: "npm run dev -- --port 5173 --strictPort",
+      // --host 127.0.0.1: Vite's default `localhost` bind can resolve to
+      // IPv6 (::1) on CI runners while the health check below probes IPv4 —
+      // the check then never passes and webServer times out at 60s.
+      command: "npm run dev -- --port 5173 --strictPort --host 127.0.0.1",
       cwd: "../frontend",
       url: "http://127.0.0.1:5173",
       reuseExistingServer: !process.env.CI,
