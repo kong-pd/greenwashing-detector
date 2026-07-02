@@ -84,3 +84,18 @@ def test_history_returns_list():
     data = response.json()
     assert "results" in data
     assert isinstance(data["results"], list)
+
+
+def test_history_row_shape_uses_job_id():
+    """History rows speak the API-wide job vocabulary: job_id (matching POST
+    /analyze and GET /report/{job_id}) — never the raw DB column `id`.
+    Regression (audit C-2): the UI read job_id while the API sent id, so the
+    Reports list rendered 'undefined' in every row's meta line."""
+    from db.supabase import history_row
+
+    db_row = {"id": "j-123", "company_name": "Acme", "score": 61,
+              "risk_level": "High Risk", "completed_at": "2026-07-02T05:00:00Z"}
+    out = history_row(db_row)
+    assert out["job_id"] == "j-123"
+    assert "id" not in out
+    assert set(out) == {"job_id", "company_name", "score", "risk_level", "completed_at"}
