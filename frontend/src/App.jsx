@@ -18,8 +18,9 @@ import {
   Toaster, useDropdown,
   NotificationsMenu, UserMenu, CommandPalette, SettingsSheet,
 } from "./components/Interactions.jsx";
-import { AnalysisScreen } from "./screens/AnalysisScreen.jsx";
+import { AnalysisScreen, normalise } from "./screens/AnalysisScreen.jsx";
 import { ReportScreen, EvidenceDrawer } from "./screens/ReportScreen.jsx";
+import { getReport } from "./api/client.js";
 
 const TWEAK_DEFAULTS = {
   palette: "sage",
@@ -822,6 +823,29 @@ function ReportsScreen({ onOpenReport }) {
     fetchHistory();
   }, []);
 
+  // C-2: a history row is a 5-field summary, not a report. Opening one
+  // fetches the full record through the real GET /api/report/{job_id}
+  // (DB first, NFR-09 relay fallback) and only navigates on success —
+  // the empty-shell report is gone for good.
+  const [openingId, setOpeningId] = useState(null);
+  async function openReport(r) {
+    if (openingId) return;
+    setOpeningId(r.job_id);
+    try {
+      const raw  = await getReport(r.job_id);
+      const full = normalise(raw, makeLiveClaim(r.company_name || "Unknown"));
+      if (!full) {
+        gwdToast("Report no longer available — it may have expired", { kind: "warn" });
+        return;
+      }
+      onOpenReport(full, r.company_name);
+    } catch {
+      gwdToast("Couldn't load the report — backend unreachable", { kind: "warn" });
+    } finally {
+      setOpeningId(null);
+    }
+  }
+
   return (
     <div className="screen reports-screen">
       <header className="wl-head">
@@ -854,7 +878,7 @@ function ReportsScreen({ onOpenReport }) {
           {reports.map(r => {
             const band = riskBand(r.score ?? 0);
             return (
-              <li key={r.job_id} className="rpts-row" onClick={() => onOpenReport(r)}>
+              <li key={r.job_id} className="rpts-row" onClick={() => openReport(r)}>
                 <div className="rpts-l">
                   <div className="rpts-meta mono small mute">
                     {r.job_id} · {(r.completed_at || "").slice(0, 10)}
@@ -876,8 +900,9 @@ function ReportsScreen({ onOpenReport }) {
                 </div>
                 <div className="rpts-actions">
                   <button className="rep-action small"
-                    onClick={e => { e.stopPropagation(); onOpenReport(r); }}>
-                    Open →
+                    disabled={openingId === r.job_id}
+                    onClick={e => { e.stopPropagation(); openReport(r); }}>
+                    {openingId === r.job_id ? "Opening…" : "Open →"}
                   </button>
                   <button className="rep-action small ghost"
                     onClick={e => {

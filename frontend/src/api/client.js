@@ -26,3 +26,11 @@ export async function fetchHistory() {
   const res = await fetch(`${BASE}/history`);
   return res.json();
 }
+
+// C-2: single-shot report fetch for already-completed jobs (history rows).
+// pollReport is for in-flight jobs — its loop would spin for 60 s on an
+// error envelope, which is exactly wrong for "open this old report".
+export async function getReport(jobId) {
+  const res = await fetch(`${BASE}/report/${jobId}`);
+  return res.json();
+}
