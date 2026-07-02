@@ -1,0 +1,12 @@
+{
+  "id": "lang_spanish_gap",
+  "category": "multilingual",
+  "company": "Verde SA",
+  "content": "Verde SA redujo sus emisiones un 15% y avanza hacia la neutralidad climática con energía renovable para 2035.",
+  "expected": {
+    "relevant": false,
+    "score_band": null,
+    "must_flag_types": null
+  },
+  "note": "KNOWN GAP (pinned): ES stems (emisiones/renovable) don't match EN roots (emission/renewab); only 'climát' hits. Golden set documents the gap until ES/FR stems land."
+}

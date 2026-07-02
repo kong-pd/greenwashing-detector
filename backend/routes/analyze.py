@@ -93,7 +93,25 @@ def _normalise_job(job: dict) -> dict:
         "flags":    normalised_flags,
         "evidence": evidence,
         "sources":  [e["url"] for e in evidence if isinstance(e, dict) and e.get("url")],
+        # W1 spine: live-view events + result provenance
+        "events":         job.get("events") or [],
+        "model_used":     job.get("model_used"),
+        "model_layer":    job.get("model_layer"),
+        "rubric_version": job.get("rubric_version"),
     }
+
+
+def _with_cache_event(nj: dict, company: str) -> dict:
+    """A cache fast-path never ran the pipeline — its live view is one
+    honest synthetic event, not silence and never fake queries."""
+    from datetime import datetime, timezone
+    nj = dict(nj)
+    nj["events"] = [{
+        "seq": 1, "ts": datetime.now(timezone.utc).isoformat(),
+        "trace_id": nj.get("job_id"), "span": "cache", "type": "success",
+        "level": "user", "name": "cache_hit", "data": {"company": company},
+    }]
+    return nj
 
 
 # ─── NFR-09 relay fallback ────────────────────────────────────────────────────
@@ -135,12 +153,12 @@ async def analyze(req: AnalyzeRequest):
         if str(job_id).startswith("local:"):
             job = get_job_with_local_fallback(job_id, company)
             if job:
-                return _normalise_job(job)
+                return _with_cache_event(_normalise_job(job), company)
 
         # Supabase cache hit — fetch the full job record
         job = get_job(job_id)
         if job:
-            return _normalise_job(job)
+            return _with_cache_event(_normalise_job(job), company)
 
     # No cache hit — create new job and trigger analysis service
     job_id = str(uuid.uuid4())[:8]

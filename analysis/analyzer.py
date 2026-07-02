@@ -167,110 +167,15 @@ def _format_evidence_for_prompt(evidence_list: list[dict]) -> str:
 
 # ─── System prompt ────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are a professional ESG fact-checking analyst specialising in identifying greenwashing in corporate sustainability claims.
+# W2: prompts are files — Git is the version system, the version string
+# travels in every trace and result. Bumping the rubric = new file + const.
+RUBRIC_VERSION = "3.2"
+_PROMPT_DIR = Path(__file__).parent / "prompts"
 
-Your task is to:
-1. Score the company content against the five-dimension rubric below
-2. Assign relevance weights to each evidence item following the weight rules below
-3. Return a single structured JSON object — nothing else
+def _load_prompt(name: str, version: str = RUBRIC_VERSION) -> str:
+    return (_PROMPT_DIR / f"{name}_v{version}.md").read_text()
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SCORING RUBRIC
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Score each dimension 0–20. Higher = greater greenwashing risk.
-
-1. Claim Specificity (0–20) [TCFD]
-   0  = Clear, time-bound, quantifiable targets with interim milestones
-   10 = Goals stated but vague, no defined timeline or baseline
-   20 = Slogans only — "committed to", "striving for" — zero measurable commitments
-
-2. Data Consistency (0–20) [GRI 305]
-   0  = Claims fully align with CDP, EU ETS, and other external databases
-   10 = Minor discrepancies or claims that cannot be independently verified
-   20 = Claims directly contradict verified external data
-
-3. Third-Party Verification (0–20) [EU Taxonomy Art. 8]
-   0  = Multiple credible independent certifications (SBTi, B Corp, ISCC, CDP A-list)
-   10 = Single certification or certification from a low-credibility body
-   20 = No independent verification of any kind
-
-4. Negative News (0–20) [GRI 2-27]
-   0  = No negative coverage in major media or regulatory records
-   10 = Minor controversy or criticism, no formal regulatory action
-   20 = Active regulatory investigation or major media scandal in past 12 months
-
-5. Greenwashing Language (0–20) [EU Green Claims Directive 2024]
-   0  = Precise language backed by specific data, no undefined superlatives
-   10 = Some aspirational verbs or vague qualifiers used alongside data
-   20 = Heavy use of "committed to", "net-positive", "green future" with no data support
-
-Total Score = sum of all five (0–100)
-Risk thresholds: 0–30 = Low Risk · 31–60 = Medium Risk · 61–100 = High Risk
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EVIDENCE WEIGHT RULES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-For each evidence item provided, assign a weight (0–1) strictly within
-the band for its kind. Do not assign weights outside these ranges.
-
-  Filing   (regulatory body)              → 0.85 to 0.95
-  Database (public emissions/cert DB)     → 0.80 to 0.92
-  News     (Reuters/FT/Bloomberg/BBC)     → 0.65 to 0.80
-  News     (minor or regional outlet)     → 0.40 to 0.60
-  Document (company self-disclosed)       → 0.45 to 0.65
-  Linguistic (AI pattern detection)       → 0.30 to 0.55
-
-Within each band, assign higher weight to items that more directly
-contradict or corroborate the specific claim being analysed.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OUTPUT FORMAT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Return ONLY valid JSON. No explanation, no preamble, no markdown fences.
-
-{
-  "score": <integer 0–100>,
-  "risk_level": <"Low Risk" | "Medium Risk" | "High Risk">,
-  "dimension_scores": {
-    "specificity":               <integer 0–20>,
-    "data_consistency":          <integer 0–20>,
-    "third_party_certification": <integer 0–20>,
-    "negative_news":             <integer 0–20>,
-    "greenwashing_language":     <integer 0–20>
-  },
-  "flags": [
-    {
-      "type":        <"Vague Claims" | "Data Contradiction" | "Lack of Certification" | "Negative News" | "Greenwashing Language">,
-      "severity":    <"high" | "medium" | "low">,
-      "description": <1–2 sentence specific finding referencing the content provided>,
-      "source":      <specific source name or URL from the evidence list>
-    }
-  ],
-  "evidence": [
-    {
-      "id":     <copy from input evidence list>,
-      "kind":   <copy from input evidence list>,
-      "title":  <copy from input evidence list>,
-      "org":    <copy from input evidence list>,
-      "date":   <copy from input evidence list>,
-      "url":    <copy from input evidence list>,
-      "quote":  <copy from input evidence list>,
-      "weight": <float within the prescribed band for this kind>
-    }
-  ],
-  "summary": <100–150 word English summary of overall greenwashing risk>
-}
-
-Rules:
-- flags: exactly 3, one per highest-scoring dimension
-- severity: "high" for Data Contradiction and Negative News · "medium" for Vague Claims
-  and Lack of Certification · "low" for Greenwashing Language unless score >= 14
-- evidence: include ALL items from the input evidence list with your assigned weights
-- All weights must fall within the prescribed bands — do not deviate
-- Do not add evidence items that were not in the input list"""
+SYSTEM_PROMPT = _load_prompt("system")
 
 
 MOCK_RESULT = {
@@ -423,6 +328,20 @@ def _parse_json(text: str) -> dict:
 
 # ─── Model callers ────────────────────────────────────────────────────────────
 
+def _noop_emit(*args, **kwargs):
+    return None
+
+
+def _annotate(result: dict, model: str, layer: int) -> dict:
+    """Attach provenance to a result — copied first so shared module-level
+    constants (MOCK_RESULT, local cache entries) are never mutated."""
+    out = dict(result)
+    out["model_used"]     = model
+    out["model_layer"]    = layer
+    out["rubric_version"] = RUBRIC_VERSION
+    return out
+
+
 def analyze_with_claude(company_name, content, evidence_list, cdp):
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     response = client.messages.create(
@@ -464,16 +383,20 @@ GEMINI_MODELS = [
 ]
 
 
-def _try_gemini_chain(company_name, content, ev, cdp) -> dict | None:
+def _try_gemini_chain(company_name, content, ev, cdp,
+                      emit=_noop_emit, base_layer: int = 2) -> dict | None:
     """
     Try each Gemini model in order until one succeeds.
     Returns processed result or None if all models fail.
     """
-    for model_name, label in GEMINI_MODELS:
+    for i, (model_name, label) in enumerate(GEMINI_MODELS):
+        layer = base_layer + i
         try:
+            emit("progress", "layer_attempt", model=label, layer=layer)
             raw    = analyze_with_gemini(company_name, content, ev, cdp, model_name)
-            result = _process_result(raw, ev)
+            result = _annotate(_process_result(raw, ev), label, layer)
             print(f"Gemini {label} ({model_name}): success")
+            emit("success", "model_used", level="user", model=label, layer=layer)
             return result
 
         except Exception as e:
@@ -533,18 +456,22 @@ def analyze_with_groq(company_name, content, evidence_list, cdp,
     return _parse_json(text)
 
 
-def _try_groq_chain(company_name, content, ev, cdp) -> dict | None:
+def _try_groq_chain(company_name, content, ev, cdp,
+                    emit=_noop_emit, base_layer: int = 5) -> dict | None:
     """Try Groq models in order. Returns None if key not set or all models fail."""
     groq_key = os.environ.get("GROQ_API_KEY", "")
     if not groq_key or groq_key.startswith("your_"):
         print("Groq skipped — GROQ_API_KEY not configured")
         return None
 
-    for model_name, label in GROQ_MODELS:
+    for i, (model_name, label) in enumerate(GROQ_MODELS):
+        layer = base_layer + i
         try:
+            emit("progress", "layer_attempt", model=label, layer=layer)
             raw    = analyze_with_groq(company_name, content, ev, cdp, model_name)
-            result = _process_result(raw, ev)
+            result = _annotate(_process_result(raw, ev), label, layer)
             print(f"Groq {label} ({model_name}): success")
+            emit("success", "model_used", level="user", model=label, layer=layer)
             return result
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429:
@@ -564,7 +491,8 @@ def _try_groq_chain(company_name, content, ev, cdp) -> dict | None:
 
 def analyze(company_name: str, content: str,
             evidence_list: list[dict] | None = None,
-            cdp: str = "No data") -> dict | None:
+            cdp: str = "No data",
+            emit=None) -> dict | None:
     """
     Fallback chain (Gemini-first, Groq independent backup, Claude optional):
       1. Mock mode              (USE_MOCK=true)
@@ -578,29 +506,37 @@ def analyze(company_name: str, content: str,
       9. Generic mock           (absolute last resort)
     """
     ev = evidence_list or []
+    _e = emit or _noop_emit
 
     # ── Layer 1: Mock mode ────────────────────────────────────────────────────
     if os.environ.get("USE_MOCK", "false").lower() == "true":
         print("Mock mode active")
-        return MOCK_RESULT
+        import copy
+        result = _annotate(copy.deepcopy(MOCK_RESULT), "mock", 1)
+        _e("success", "model_used", level="user", model="mock", layer=1)
+        return result
 
     # ── Layers 2–4: Gemini chain (primary, all free) ──────────────────────────
-    result = _try_gemini_chain(company_name, content, ev, cdp)
+    result = _try_gemini_chain(company_name, content, ev, cdp, emit=_e, base_layer=2)
     if result:
         return result
+    _e("fallback", "fallback", to="groq")
 
     # ── Layers 5–6: Groq chain (independent provider, all free) ──────────────
-    result = _try_groq_chain(company_name, content, ev, cdp)
+    result = _try_groq_chain(company_name, content, ev, cdp, emit=_e, base_layer=5)
     if result:
         return result
+    _e("fallback", "fallback", to="claude")
 
     # ── Layer 7: Claude (optional paid fallback) ──────────────────────────────
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if anthropic_key and not anthropic_key.startswith("your_"):
         try:
+            _e("progress", "layer_attempt", model="claude-sonnet", layer=7)
             raw    = analyze_with_claude(company_name, content, ev, cdp)
-            result = _process_result(raw, ev)
+            result = _annotate(_process_result(raw, ev), "claude-sonnet", 7)
             print("Claude API: success (paid fallback)")
+            _e("success", "model_used", level="user", model="claude-sonnet", layer=7)
             return result
         except anthropic.AuthenticationError as e:
             print(f"[CONFIG_ERROR] Claude auth failed: {e}")
@@ -647,8 +583,13 @@ def analyze(company_name: str, content: str,
                 ])
             else:
                 cached["evidence"] = _normalise_evidence(ev) if ev else []
+        cached = _annotate(cached, "local-cache", 8)
+        _e("success", "model_used", level="user", model="local-cache", layer=8)
         return cached
 
     # ── Layer 9: Generic mock ─────────────────────────────────────────────────
     print(f"All layers failed for '{company_name}' — returning generic mock")
-    return MOCK_RESULT
+    import copy
+    result = _annotate(copy.deepcopy(MOCK_RESULT), "mock", 9)
+    _e("success", "model_used", level="user", model="mock", layer=9)
+    return result

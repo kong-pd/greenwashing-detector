@@ -1,0 +1,12 @@
+{
+  "id": "nonesg_sports",
+  "category": "non_esg",
+  "company": "Daily Post",
+  "content": "The home side won 3-1 after a stoppage-time counter; the striker's brace lifted them to second in the table ahead of Sunday's derby fixture.",
+  "expected": {
+    "relevant": false,
+    "score_band": null,
+    "must_flag_types": null
+  },
+  "note": ""
+}

@@ -1,0 +1,12 @@
+{
+  "id": "edge_empty",
+  "category": "edge",
+  "company": "Blank Co",
+  "content": "   ",
+  "expected": {
+    "relevant": false,
+    "score_band": null,
+    "must_flag_types": null
+  },
+  "note": "Fails closed."
+}

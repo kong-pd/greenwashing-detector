@@ -1,0 +1,12 @@
+{
+  "id": "nonesg_finance",
+  "category": "non_esg",
+  "company": "QuantDesk",
+  "content": "Quarterly revenue rose 14% to $2.1B on stronger subscription renewals; operating margin expanded 220bps and the board approved a $500M buyback.",
+  "expected": {
+    "relevant": false,
+    "score_band": null,
+    "must_flag_types": null
+  },
+  "note": "Finance-only, no ESG signals."
+}

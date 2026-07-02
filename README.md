@@ -135,17 +135,29 @@ cd frontend && npm run dev   # → localhost:5173
 Three layers, all free of live API calls:
 
 ```bash
-# Unit + integration (106 tests)
+# Unit + integration
 pytest backend/tests/ -v          # web-service: routes, normaliser, relay fallback
-pytest analysis/tests/ -v         # pipeline: analyzer chain, weights, snippet fallback
-cd frontend && npm test           # vitest: API contracts, source links
+pytest analysis/tests/ -v         # pipeline, trace/stage contract, relevance gate
+cd frontend && npm test           # vitest: API contracts, error copy
 
-# Browser E2E (5 journeys, ~50s)
+# AI evals (golden set, runs hermetically; add RUN_MODEL_EVALS=1 + real keys for score bands)
+pytest analysis/evals/ -v
+python -m evals.compare --label v3.2 [--against <old-label>]   # offline prompt regression
+
+# Browser E2E (14 journeys, ~2min)
 cd e2e && npm ci && npx playwright install chromium
 npx playwright test
 ```
 
 The E2E suite boots the real three-service topology (Chromium → Vite → web-service → analysis-service) and drives it like a user: search a cached company, hit a scraping failure, recover through manual input, open the evidence drawer. It is hermetic by construction — the same degradation ladder the app ships for resilience is what makes the tests deterministic: `USE_MOCK` short-circuits the AI chain, an empty Serper key makes the scraper fail with zero network, and pointing `SUPABASE_URL` at a closed local port forces every result through the NFR-09 in-memory relay. Every fallback layer asserted is a production feature, not test scaffolding. Runs in CI on every push (`.github/workflows/e2e.yml`), no secrets required.
+
+---
+
+## AI quality engineering
+
+Every pipeline run writes an append-only **trace** (`{seq, span, type, level, name, data}`), emitted through a tiny stage contract (`analysis/tracing.py`). One log, three consumers: the loading screen renders the `level=user` projection live through the existing poll (every line on screen actually happened — including which fallback layer answered); the full JSONL lands in `analysis/traces/` as feedstock for the quality loop; fallback-layer hit rates and stage latencies fall out for free.
+
+The quality loop: a **relevance gate** (`relevance.py`) refuses non-ESG content with `content_not_relevant` before any model spends a token — born from a real failure where a homework PDF received a confident greenwashing verdict. A **golden set** (`analysis/evals/golden/`, 23 cases: cached companies, clear greenwash/clean, non-ESG, edge, prompt-injection, multilingual) is executed as pytest, layered by what the environment can honestly verify: gate expectations always, result-shape property assertions on every run, score bands only with real keys. `evals/compare.py` diffs two snapshots for offline prompt regressions; `evals/flag.py` files bad traces into the failure corpus, whose house rule is that every diagnosed failure becomes a golden case. Prompts live in `analysis/prompts/` with the version recorded in every trace, result, and report masthead. Known gap, pinned by the golden set itself: ES/FR relevance stems.
 
 ---
 
@@ -197,9 +209,15 @@ frontend/src/
   screens/AnalysisScreen.jsx    polling state machine + manual input fallback
   screens/ReportScreen.jsx      five-section report + evidence drawer
 
+analysis/
+  tracing.py            trace/event log + stage contract (the spine)
+  relevance.py          AI-1 gate — refuses non-ESG content before scoring
+  prompts/              versioned prompt files (rubric v3.2)
+  evals/                golden set · pytest runner · compare · failure corpus
+
 e2e/
   playwright.config.js  boots all three services with a hermetic offline env
-  tests/                five browser journeys (cache hit, failure→recovery, …)
+  tests/                14 browser journeys (cache hit, failure→recovery, live events, …)
 
 database/
   schema.sql            fresh setup

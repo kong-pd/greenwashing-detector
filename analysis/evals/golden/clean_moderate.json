@@ -1,0 +1,15 @@
+{
+  "id": "clean_moderate",
+  "category": "clear_clean",
+  "company": "GreenGrid Utilities",
+  "content": "GreenGrid's climate transition plan: 2.1 MtCO2e emissions (down 12%), 60% renewable generation by 2028, TCFD-aligned reporting, external assurance by EY, Scope 3 screening underway.",
+  "expected": {
+    "relevant": true,
+    "score_band": [
+      5,
+      50
+    ],
+    "must_flag_types": null
+  },
+  "note": ""
+}

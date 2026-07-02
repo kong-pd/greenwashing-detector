@@ -52,7 +52,7 @@ test("scraping failure offers manual input; pasted content completes via relay",
 
   // Pipeline restarts and is transparent about the degraded input mode.
   await expect(page.locator(".ana-context-ticker")).toHaveText("MANUAL INPUT");
-  await expect(page.getByText("User-provided content")).toBeVisible();
+  await expect(page.getByText("User-provided content", { exact: true })).toBeVisible();
 
   // Mock analyzer verdict (analyzer.py MOCK_RESULT), delivered despite the
   // database being unreachable for the entire journey.

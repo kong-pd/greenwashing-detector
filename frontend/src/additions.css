@@ -330,3 +330,33 @@
   border-top: .5px solid var(--c-line);
 }
 .rep-action:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── P2-6 fix: Claim tab form contrast ─────────────────────────────────────
+   .lv2-input-box is transparent by design — the white card lives on its
+   parent .lv2-input-row. The stacked claim form has its own container, so
+   each field carries the card treatment itself. */
+.lv2-claim-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.lv2-claim-form .lv2-input-box {
+  background: rgba(255,255,255,.96);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.12), 0 16px 48px rgba(0,0,0,.24);
+}
+.lv2-claim-form .lv2-input-box:has(textarea) {
+  align-items: flex-start;
+  min-height: 0;
+}
+.lv2-claim-form textarea.lv2-input {
+  padding: 15px 0;
+  resize: vertical;
+  min-height: 76px;
+  line-height: 1.45;
+}
+.lv2-claim-form .lv2-btn {
+  align-self: stretch;
+  justify-content: center;
+}

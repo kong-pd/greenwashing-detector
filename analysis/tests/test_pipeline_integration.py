@@ -77,7 +77,7 @@ def test_pipeline_completes_and_writes_table_contract(fake_db, monkeypatch):
     monkeypatch.setattr(analysis_main, "enrich", fake_enrich)
 
     _run(RunRequest(job_id="it-001", company_name="Acme Corp",
-                    manual_content="We are committed to net zero." * 10))
+                    manual_content="Net-zero by 2045: Scope 1 emissions down 40% on renewable power. We are committed to net zero." * 10))
 
     updates = fake_db.rows("analysis_jobs", "update")
     final = updates[-1][1]
@@ -104,7 +104,7 @@ def test_pipeline_completes_and_writes_table_contract(fake_db, monkeypatch):
 
 def test_snippet_fallback_marks_degraded_then_completes(fake_db, monkeypatch):
     async def fake_scrape(name):
-        return ("[Search-snippet digest] " + "content " * 60,
+        return ("[Search-snippet digest] net-zero Scope 1 emissions, renewable power. " + "content " * 60,
                 "scraping_snippet_fallback")
     async def fake_enrich(name):
         return ([], "cdp stub")
@@ -149,7 +149,7 @@ def test_analyzer_none_saves_analysis_failed(fake_db, monkeypatch):
     monkeypatch.setattr(analysis_main, "analyze", lambda **kw: None)
 
     _run(RunRequest(job_id="it-005", company_name="Acme",
-                    manual_content="x" * 200))
+                    manual_content="Net-zero by 2045: Scope 1 emissions down 40% on renewable power. x" * 200))
 
     final = fake_db.rows("analysis_jobs", "update")[-1][1]
     assert final == {"status": "failed", "fail_reason": "analysis_failed"}

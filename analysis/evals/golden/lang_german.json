@@ -1,0 +1,12 @@
+{
+  "id": "lang_german",
+  "category": "multilingual",
+  "company": "Nordwerk AG",
+  "content": "Nordwerk AG ist klimaneutral bis 2040; die Emissionen sanken um 18% gegenüber 2019, Nachhaltigkeit und erneuerbare Energie prägen unsere Strategie (SBTi eingereicht).",
+  "expected": {
+    "relevant": true,
+    "score_band": null,
+    "must_flag_types": null
+  },
+  "note": "DE stems covered; ES/FR are a known gap."
+}
