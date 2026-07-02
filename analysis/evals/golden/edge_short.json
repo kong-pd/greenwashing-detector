@@ -1,0 +1,12 @@
+{
+  "id": "edge_short",
+  "category": "edge",
+  "company": "Terse Inc",
+  "content": "We are net-zero.",
+  "expected": {
+    "relevant": false,
+    "score_band": null,
+    "must_flag_types": null
+  },
+  "note": "Below MIN_CHARS: one slogan is not a disclosure."
+}

@@ -1,0 +1,15 @@
+{
+  "id": "clean_hard_sector",
+  "category": "clear_clean",
+  "company": "Baltika Cement",
+  "content": "Baltika Cement discloses 8.4 MtCO2e gross emissions, a 2030 target of -25% validated by SBTi, carbon capture pilot at plant 3, and EU ETS verified data for all sites.",
+  "expected": {
+    "relevant": true,
+    "score_band": [
+      10,
+      55
+    ],
+    "must_flag_types": null
+  },
+  "note": "Hard-to-abate but transparent."
+}

@@ -1,0 +1,15 @@
+{
+  "id": "greenwash_offset_only",
+  "category": "clear_greenwash",
+  "company": "AirGo",
+  "content": "AirGo is fully net-zero today: every flight's carbon emissions are offset through certificates, so our climate impact is solved with no operational changes needed.",
+  "expected": {
+    "relevant": true,
+    "score_band": [
+      50,
+      95
+    ],
+    "must_flag_types": null
+  },
+  "note": "Offset-only net-zero claim."
+}

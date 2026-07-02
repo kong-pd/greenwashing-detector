@@ -1,0 +1,15 @@
+{
+  "id": "cached_bp",
+  "category": "cached_company",
+  "company": "BP",
+  "content": "BP sustainability disclosure: emissions fell and our net-zero roadmap with Scope 1 and Scope 2 targets, renewable power and SBTi validation.",
+  "expected": {
+    "relevant": true,
+    "score_band": [
+      60,
+      95
+    ],
+    "must_flag_types": null
+  },
+  "note": "Known company; band pins the real-model layer, cache layer pins exact score elsewhere."
+}

@@ -99,3 +99,13 @@ def test_history_row_shape_uses_job_id():
     assert out["job_id"] == "j-123"
     assert "id" not in out
     assert set(out) == {"job_id", "company_name", "score", "risk_level", "completed_at"}
+
+
+def test_cached_analyze_response_carries_cache_hit_event():
+    """W1 spine: a cache fast-path never ran the pipeline, so its 'live view'
+    is one honest synthetic event — not silence, and never fake queries."""
+    response = client.post("/api/analyze", json={"company_name": "Shell"})
+    data = response.json()
+    events = data.get("events") or []
+    hits = [e for e in events if e.get("name") == "cache_hit"]
+    assert hits and hits[0].get("level") == "user"

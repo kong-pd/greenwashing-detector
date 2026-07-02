@@ -162,7 +162,7 @@ export function ReportScreen({ claim, query, origin = "search", scoreVariant = "
             <span className="sep">·</span>
             <span>GreenCheck ESG Engine</span>
             <span className="sep">·</span>
-            <span>Gemini / Groq · rubric v3.2</span>
+            <span>{claim.modelUsed ? `${claim.modelUsed} (layer ${claim.modelLayer})` : "Gemini / Groq"} · rubric v{claim.rubricVersion || "3.2"}</span>
           </div>
 
           <h1 className="rep-mast-title">{claim.headline}</h1>
@@ -266,11 +266,11 @@ export function ReportScreen({ claim, query, origin = "search", scoreVariant = "
             <div className="rep-summary-side">
               <div className="rep-byline mono small mute">
                 <div>Prepared by</div>
-                <div className="rep-byline-name">GWD Analyzer · Gemini / Groq</div>
+                <div className="rep-byline-name">GWD Analyzer · {claim.modelUsed ? `${claim.modelUsed} (layer ${claim.modelLayer})` : "Gemini / Groq"}</div>
               </div>
               <div className="rep-byline mono small mute">
                 <div>Rubric version</div>
-                <div className="rep-byline-name">v3.2 · 5 dimensions · 0–100</div>
+                <div className="rep-byline-name">v{claim.rubricVersion || "3.2"} · 5 dimensions · 0–100</div>
               </div>
               <div className="rep-byline mono small mute">
                 <div>Standards aligned</div>

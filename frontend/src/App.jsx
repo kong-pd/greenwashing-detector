@@ -242,7 +242,7 @@ function LandingScreen({ onAnalyze, onMethodology }) {
                     className="lv2-input"
                   />
                 </div>
-                <div className={"lv2-input-box" + (validationMsg ? " invalid" : "")} style={{ alignItems: "flex-start" }}>
+                <div className={"lv2-input-box" + (validationMsg ? " invalid" : "")}>
                   <textarea
                     ref={inputRef}
                     value={inputValue}
@@ -250,7 +250,6 @@ function LandingScreen({ onAnalyze, onMethodology }) {
                     placeholder={tab.placeholder}
                     className="lv2-input"
                     rows={3}
-                    style={{ resize: "vertical", minHeight: 64 }}
                   />
                 </div>
                 <button className={"lv2-btn" + (inputValue.trim() && claimCompany.trim() ? "" : " dim")}

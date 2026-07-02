@@ -1,0 +1,12 @@
+{
+  "id": "edge_boilerplate",
+  "category": "edge",
+  "company": "OmniHold",
+  "content": "This report contains forward-looking statements subject to risks and uncertainties. Please refer to our annual filing for a discussion of factors. All rights reserved worldwide.",
+  "expected": {
+    "relevant": false,
+    "score_band": null,
+    "must_flag_types": null
+  },
+  "note": "Legal boilerplate."
+}

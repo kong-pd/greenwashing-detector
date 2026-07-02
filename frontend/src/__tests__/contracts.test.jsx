@@ -159,3 +159,12 @@ describe("getAnalysisErrorCopy (C-1: failures are honest, never demo data)", () 
     expect(c.body).toContain("Acme");
   });
 });
+
+describe("getAnalysisErrorCopy · AI-1 relevance refusal", () => {
+  it("refuses irrelevant content with its own honest copy", () => {
+    const c = getAnalysisErrorCopy({ kind: "content_not_relevant" }, "Acme");
+    expect(c.kicker).toBe("NOT SUSTAINABILITY CONTENT");
+    expect(c.body).toContain("Acme");
+    expect(c.body).toContain("no verdict");
+  });
+});

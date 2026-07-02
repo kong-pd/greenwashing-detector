@@ -1,0 +1,12 @@
+{
+  "id": "nonesg_homework",
+  "category": "non_esg",
+  "company": "AssignmentII",
+  "content": "This assignment implements a binary search tree in Python. Task 1 covers insertion and traversal; Task 2 benchmarks lookup complexity against a hash map baseline. Submit by Friday.",
+  "expected": {
+    "relevant": false,
+    "score_band": null,
+    "must_flag_types": null
+  },
+  "note": "The founding AI-1 case: the homework PDF."
+}

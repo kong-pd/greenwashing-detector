@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 from scraper import scrape
 from enricher import enrich
 from analyzer import analyze
+from tracing import Trace, StageMeta, run_stage
+from relevance import check_relevance
 import os
 from supabase import create_client
 
@@ -52,6 +54,14 @@ def health():
 _RELAY_MAX = 50
 _RELAY: dict[str, dict] = {}        # job_id → job-shaped record
 _RELAY_ORDER: list[str] = []        # FIFO eviction
+
+
+def _relay_append_event(job_id: str, ev: dict):
+    """The live-UI transport: user-level events ride the relay record and
+    reach the browser through the existing poll — no new infrastructure."""
+    rec = _RELAY.get(job_id) or {"id": job_id, "status": "processing"}
+    rec.setdefault("events", []).append(ev)
+    _relay_put(job_id, rec)
 
 
 def _relay_put(job_id: str, record: dict):
@@ -105,6 +115,9 @@ def save_result(job_id: str, result: dict, company_name: str = ""):
         "dimension_scores": dim_scores,
         "completed_at":     completed_at,
         "analysis_flags":   result.get("flags") or [],
+        "model_used":       result.get("model_used"),
+        "model_layer":      result.get("model_layer"),
+        "rubric_version":   result.get("rubric_version"),
     })
 
     try:
@@ -143,7 +156,7 @@ def save_result(job_id: str, result: dict, company_name: str = ""):
     except Exception as e:
         print(f"[{job_id}] save_result DB write failed — "
               f"result is still served via the in-memory relay (NFR-09): {e}")
-
+    return "relay"
 
 def save_failed(job_id: str, reason: str):
     """
@@ -220,6 +233,8 @@ async def process(req: RunRequest):
       4. Persist to Supabase
     """
     print(f"[{req.job_id}] starting pipeline for '{req.company_name}'")
+    trace = Trace(req.job_id,
+                  on_user_event=lambda ev: _relay_append_event(req.job_id, ev))
     try:
         # ── Step 1: content ──────────────────────────────────────────────────
         update_step(req.job_id, "Fetching company content...")
@@ -228,29 +243,61 @@ async def process(req: RunRequest):
             # User-provided content — skip scraping entirely
             content = req.manual_content
             print(f"[{req.job_id}] using manual content ({len(content)} chars)")
+            trace.emit("scrape", "success", "manual_content",
+                       level="user", chars=len(content))
         else:
             # scrape() returns (content, reason). Three shapes:
             #   (text, None)                        → full scrape OK
             #   (text, "scraping_snippet_fallback") → degraded source, continue
             #   (None, blocked/not_found)           → hard failure
-            content, fail_reason = await scrape(req.company_name)
+            r = await run_stage(trace, StageMeta(name="scrape", kind="network"),
+                                scrape, req.company_name)
+            content, fail_reason = r.data if r.ok else (None, "scraping_failed")
 
             if not content:
                 # Pass the specific fail_reason so the frontend can show
                 # the appropriate banner (not found vs. access blocked)
                 print(f"[{req.job_id}] scraping failed: {fail_reason}")
+                trace.emit("scrape", "error", fail_reason or "scraping_not_found",
+                           level="user")
                 save_failed(req.job_id, fail_reason or "scraping_not_found")
+                trace.dump_jsonl()
                 return
 
+            if content and fail_reason != "scraping_snippet_fallback":
+                trace.emit("scrape", "success", "page_found",
+                           level="user", chars=len(content))
             if fail_reason == "scraping_snippet_fallback":
                 # Degraded middle state: content comes from search snippets.
                 # Record the marker (status stays processing) and continue —
                 # the completed report keeps fail_reason for the honesty banner.
+                trace.emit("scrape", "progress", "snippet_fallback",
+                           level="user", chars=len(content))
                 mark_degraded(req.job_id, fail_reason)
+
+        # ── Step 1.5: relevance gate (AI-1) ─────────────────────────────────
+        # Runs on ALL content — scraped, pasted, or extracted from a PDF.
+        # Off-topic input is refused before any model spends a token on it.
+        update_step(req.job_id, "Checking content relevance...")
+        rel = check_relevance(content)
+        trace.emit("relevance", "success", "relevance_checked", level="user",
+                   signals=rel["signals"], relevant=rel["relevant"])
+        if not rel["relevant"]:
+            print(f"[{req.job_id}] content not relevant "
+                  f"({rel['signals']} signals) — refusing to score")
+            trace.emit("relevance", "error", "content_not_relevant",
+                       level="user", signals=rel["signals"])
+            save_failed(req.job_id, "content_not_relevant")
+            trace.dump_jsonl()
+            return
 
         # ── Step 2: enrich ───────────────────────────────────────────────────
         update_step(req.job_id, "Gathering external data...")
-        evidence_list, cdp_data = await enrich(req.company_name)
+        r = await run_stage(trace, StageMeta(name="enrich", kind="network"),
+                            enrich, req.company_name)
+        evidence_list, cdp_data = r.data if r.ok else ([], "No data")
+        trace.emit("enrich", "success", "sources_found",
+                   level="user", sources=len(evidence_list))
         print(f"[{req.job_id}] enriched — "
               f"{len(evidence_list)} evidence items")
 
@@ -261,16 +308,26 @@ async def process(req: RunRequest):
             content=content,
             evidence_list=evidence_list,
             cdp=cdp_data,
+            emit=trace.span_emitter("analyze"),
         )
         if not result:
             print(f"[{req.job_id}] analyzer returned None — failing")
+            trace.emit("analyze", "error", "analysis_failed", level="user")
             save_failed(req.job_id, "analysis_failed")
+            trace.dump_jsonl()
             return
 
         # ── Step 4: persist ──────────────────────────────────────────────────
         update_step(req.job_id, "Saving results...")
-        save_result(req.job_id, result, company_name=req.company_name)
+        persisted_to = save_result(req.job_id, result, company_name=req.company_name)
+        trace.emit("persist", "success",
+                   "db_saved" if persisted_to == "db" else "relay_only",
+                   level="user")
+        trace.dump_jsonl()
 
     except Exception as e:
         print(f"[{req.job_id}] pipeline exception: {e}")
+        trace.emit("pipeline", "error", "pipeline_exception",
+                   error=type(e).__name__, message=str(e)[:300])
         save_failed(req.job_id, str(e))
+        trace.dump_jsonl()

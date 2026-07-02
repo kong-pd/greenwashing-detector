@@ -1,0 +1,12 @@
+{
+  "id": "nonesg_recipe",
+  "category": "non_esg",
+  "company": "Sweet Crumbs",
+  "content": "Cream the butter and sugar, fold in flour and cocoa, bake at 180C for 35 minutes, cool on a wire rack, then ice generously and serve with tea.",
+  "expected": {
+    "relevant": false,
+    "score_band": null,
+    "must_flag_types": null
+  },
+  "note": ""
+}

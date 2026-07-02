@@ -27,6 +27,42 @@ async function startAnalysis(query, manualContent, signal) {
   return res.json();
 }
 
+// ── W1 spine: the live view is the user-level projection of the trace ──
+const STEP_SPANS = {
+  fetch:   ["scrape", "cache"],
+  extract: ["scrape", "cache", "relevance"],
+  enrich:  ["enrich", "cache"],
+  analyze: ["analyze", "cache"],
+  compose: ["persist", "cache"],
+};
+
+// A step may only complete once its span has reported. Before the first
+// poll lands, the timer keeps its rhythm (pacing theater is fine —
+// content theater is not).
+export function stepSatisfied(key, events) {
+  if (!events || events.length === 0) return true;
+  const spans = STEP_SPANS[key] || [];
+  return events.some(e =>
+    (e.type === "success" || e.type === "progress") && spans.includes(e.span));
+}
+
+export function formatEvent(e) {
+  const d = e.data || {};
+  switch (e.name) {
+    case "cache_hit":        return "Cache hit · precomputed report";
+    case "manual_content":   return `Manual content · ${d.chars ?? "?"} chars`;
+    case "page_found":       return `ESG page found · ${d.chars ?? "?"} chars`;
+    case "snippet_fallback": return "Degraded source · search snippets";
+    case "sources_found":    return `External sources · ${d.sources ?? 0}`;
+    case "relevance_checked": return `Relevance check · ${d.signals ?? 0} signals`;
+    case "model_used":       return `Model · ${d.model} (layer ${d.layer})`;
+    case "stage_retry":      return `Retrying ${e.span} · attempt ${d.attempt}`;
+    case "db_saved":         return "Saved to database";
+    case "relay_only":       return "DB unavailable · served via relay";
+    default:                 return `${e.span} · ${e.name}`;
+  }
+}
+
 async function pollReport(jobId, signal) {
   const res = await fetch(`/api/report/${jobId}`, { signal });
   if (!res.ok) throw new Error(`Poll ${res.status}`);
@@ -84,6 +120,10 @@ export function normalise(raw, demoClaim) {
     // carry fail_reason as a data-quality note. Passed through so the Report
     // screen renders an honest "based on search snippets" banner. This value
     // sits beside (never replaces) the hard-failure reasons.
+    rubricVersion: raw.rubric_version || raw.rubricVersion || null,
+    modelUsed:     raw.model_used     || raw.modelUsed     || null,
+    modelLayer:    raw.model_layer    ?? raw.modelLayer    ?? null,
+
     failReason:    raw.fail_reason || raw.failReason || null,
     contentSource: (raw.fail_reason || raw.failReason) === "scraping_snippet_fallback"
                      ? "snippet" : "page",
@@ -138,6 +178,11 @@ const ANALYSIS_ERROR_COPY = {
     kicker: "SERVICE UNREACHABLE",
     title:  "Analysis service unreachable",
     body:   "We couldn't reach the analysis backend, so {company} was not analysed. On the hosted demo this usually means the Railway instance is cold-starting (~60 s) — try again in a moment.",
+  },
+  content_not_relevant: {
+    kicker: "NOT SUSTAINABILITY CONTENT",
+    title:  "This doesn't read as sustainability content",
+    body:   "GreenCheck scores ESG claims and disclosures. The content provided for {company} didn't carry enough sustainability signals to score honestly — no verdict was produced.",
   },
   analysis_failed: {
     kicker: "ANALYSIS FAILED",
@@ -281,6 +326,7 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
   // claim._manualContent — the pipeline then skips scraping entirely.
   // (Previously this field was attached upstream and silently dropped.)
   const [manualContent,      setManualContent]      = useState(claim?._manualContent ?? null);
+  const [events,             setEvents]             = useState([]);
 
   const finished     = useRef(false);
   const pipelineDone = useRef(false);
@@ -304,12 +350,15 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
       }
       return;
     }
+    const key = steps[stepIdx].key;
+    const wait = stepSatisfied(key, events) ? (timings[stepIdx] ?? 1200) : 400;
     const t = setTimeout(() => {
-      setDoneSteps(prev => new Set([...prev, steps[stepIdx].key]));
+      if (!stepSatisfied(key, events)) return; // re-armed when events arrive
+      setDoneSteps(prev => new Set([...prev, key]));
       setStepIdx(i => i + 1);
-    }, timings[stepIdx] ?? 1200);
+    }, wait);
     return () => clearTimeout(t);
-  }, [stepIdx, apiResult, apiError, scrapingFailReason]);
+  }, [stepIdx, apiResult, apiError, scrapingFailReason, events]);
 
   // ── 2. Animate counters ──────────────────────────────────────────────────
   useEffect(() => {
@@ -345,6 +394,7 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
           ac.signal,
         );
 
+        if (Array.isArray(initRes.events)) setEvents(initRes.events);
         if (initRes.status === "completed" || initRes.score != null) {
           const merged = normalise(initRes, claim);
           setApiResult(merged);
@@ -363,6 +413,7 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
           if (ac.signal.aborted) return;
 
           const poll = await pollReport(jobId, ac.signal);
+          if (Array.isArray(poll.events)) setEvents(poll.events);
 
           if (poll.status === "completed") {
             const merged = normalise(poll, claim);
@@ -383,7 +434,10 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
             } else {
               // C-1: non-scraping failure (or a manual retry that failed
               // again) — surface it. Never substitute demo data for a verdict.
-              setApiError({ kind: "analysis_failed", detail: reason });
+              // AI-1: an irrelevant-content refusal gets its own honest copy.
+              const kind = reason === "content_not_relevant"
+                ? "content_not_relevant" : "analysis_failed";
+              setApiError({ kind, detail: reason });
             }
             return;
           }
@@ -703,9 +757,9 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
           </div>
 
           <div className="ana-signal-card live">
-            <div className="signal-lbl mono small">LIVE QUERIES</div>
+            <div className="signal-lbl mono small">PIPELINE EVENTS</div>
             <div className="ana-live-queries">
-              <LiveQueries stepIdx={stepIdx} companyName={displayName} />
+              <EventLog events={events} />
             </div>
           </div>
         </aside>
@@ -714,31 +768,23 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
   );
 }
 
-function LiveQueries({ stepIdx, companyName }) {
-  const name = encodeURIComponent(companyName);
-  const QUERIES = [
-    `GET  google.com/search?q=${companyName}+sustainability+ESG+report`,
-    `GET  cdp.net/api/v1/responses?company=${name}`,
-    `GET  ec.europa.eu/clima/ets/registry/${name}`,
-    `GET  sciencebasedtargets.org/companies/${name}`,
-    `POST google.serper.dev/news   q=${name}+greenwashing+OR+ESG`,
-    `GET  ogmpartnership.com/members/${name}`,
-    `POST generativelanguage.googleapis.com   model=gemini-2.5-flash-lite`,
-    `PARSE  claim spans → normalised evidence`,
-    `DIFF  scope-1 reported vs EU ETS verified`,
-    `RANK  evidence by weight · kind · recency`,
-  ];
-  const visible = Math.min(QUERIES.length, 3 + stepIdx * 2);
+// W1 spine: renders the user-level trace projection delivered by the poll.
+// Every line here corresponds to something that actually happened.
+function EventLog({ events }) {
+  if (!events || events.length === 0) {
+    return (
+      <ul className="live-q mono small">
+        <li className="live-q-active">› waiting for pipeline events…</li>
+      </ul>
+    );
+  }
   return (
     <ul className="live-q mono small">
-      {QUERIES.slice(0, visible).map((q, i) => {
-        const isLast = i === visible - 1 && stepIdx < 5;
-        return (
-          <li key={i} className={isLast ? "live-q-active" : ""}>
-            {isLast ? "›" : "·"} {q}
-          </li>
-        );
-      })}
+      {events.map((e, i) => (
+        <li key={e.seq ?? i} className={i === events.length - 1 ? "live-q-active" : ""}>
+          {i === events.length - 1 ? "›" : "·"} {formatEvent(e)}
+        </li>
+      ))}
     </ul>
   );
 }

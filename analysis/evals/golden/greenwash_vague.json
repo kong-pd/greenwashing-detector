@@ -1,0 +1,17 @@
+{
+  "id": "greenwash_vague",
+  "category": "clear_greenwash",
+  "company": "EverGreen Corp",
+  "content": "We are deeply committed to a green future and eco-friendly sustainability everywhere. Our planet-positive journey honours the climate and the environmental spirit of tomorrow.",
+  "expected": {
+    "relevant": true,
+    "score_band": [
+      55,
+      95
+    ],
+    "must_flag_types": [
+      "Vague Claims"
+    ]
+  },
+  "note": "All adjectives, zero numbers."
+}

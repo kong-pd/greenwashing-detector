@@ -1,0 +1,15 @@
+{
+  "id": "clean_specific",
+  "category": "clear_clean",
+  "company": "NordSteel",
+  "content": "NordSteel cut Scope 1 emissions 41% vs 2019 (verified by DNV), sourced 78% renewable electricity, and our SBTi 1.5C target was validated in 2024; residual carbon disclosed per GRI.",
+  "expected": {
+    "relevant": true,
+    "score_band": [
+      5,
+      45
+    ],
+    "must_flag_types": null
+  },
+  "note": "Time-bound, third-party verified."
+}

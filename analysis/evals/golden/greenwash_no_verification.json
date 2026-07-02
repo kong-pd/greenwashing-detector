@@ -1,0 +1,17 @@
+{
+  "id": "greenwash_no_verification",
+  "category": "clear_greenwash",
+  "company": "TerraNova Ltd",
+  "content": "TerraNova reduced emissions dramatically and is essentially carbon neutral already; our internal team confirms our sustainability leadership without needing external ESG audits.",
+  "expected": {
+    "relevant": true,
+    "score_band": [
+      55,
+      95
+    ],
+    "must_flag_types": [
+      "Lack of Certification"
+    ]
+  },
+  "note": "Self-attested, refuses verification."
+}
