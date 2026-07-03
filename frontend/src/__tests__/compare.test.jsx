@@ -37,6 +37,17 @@ describe("toggleSelection", () => {
     toggleSelection(sel, row("b"));
     expect(sel.map(r => r.job_id)).toEqual(["a"]);
   });
+
+  it("rows without a job_id are unselectable — and never poison the queue", () => {
+    // undefined === undefined would otherwise make two DIFFERENT id-less
+    // rows toggle each other off (reads as "single-select only" in the UI).
+    const ghost1 = { company_name: "No Id A" };
+    const ghost2 = { company_name: "No Id B" };
+    let sel = toggleSelection([], ghost1);
+    expect(sel).toEqual([]);
+    sel = toggleSelection([row("a")], ghost2);
+    expect(sel.map(r => r.job_id)).toEqual(["a"]);
+  });
 });
 
 describe("topFlags", () => {

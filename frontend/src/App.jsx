@@ -18,6 +18,9 @@ import { ReportScreen, EvidenceDrawer } from "./screens/ReportScreen.jsx";
 import { CompareScreen, toggleSelection } from "./screens/CompareScreen.jsx";
 import { fetchHistory } from "./api/client.js";
 import { useOpenReport, recentCards } from "./hooks/useOpenReport.js";
+import {
+  loadWatchlist, saveWatchlist, toggleWatch, isWatched, watchSnapshot, watchDelta,
+} from "./watchlist.js";
 
 const TWEAK_DEFAULTS = {
   palette: "sage",
@@ -483,7 +486,7 @@ function BrandMark() {
 // ─────────────────────────────────────────────── Reports screen
 // FR-29: ReportsScreen now calls GET /api/history for real data.
 // Falls back to empty state (not Petrovera demo data) if API is unavailable.
-function ReportsScreen({ onOpenReport, onCompare }) {
+function ReportsScreen({ onOpenReport, onCompare, watchlist = [], onToggleWatch, onReanalyse }) {
   const [reports,  setReports]  = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [apiError, setApiError] = useState(false);
@@ -532,6 +535,56 @@ function ReportsScreen({ onOpenReport, onCompare }) {
           </p>
         </div>
       </header>
+
+      {/* PROD-1 L3: the watchlist — baseline → latest with a signed delta.
+          Honest about scope ("local to this browser") and about state:
+          no new run yet says so instead of inventing a delta. Empty list
+          → no block. */}
+      {watchlist.length > 0 && (
+        <section className="rpts-watch">
+          <div className="rpts-watch-lbl mono small mute">
+            WATCHLIST · local to this browser
+          </div>
+          {watchlist.map(w => {
+            const d = watchDelta(w, reports);
+            return (
+              <div className="rpts-watch-row" key={w.company_name}>
+                <span className="rpts-watch-co">{w.company_name}</span>
+                <span className="mono small mute">watched at {w.score}</span>
+                {d.status === "no_new" ? (
+                  <span className="rpts-watch-delta mono small mute">
+                    no new analysis yet
+                  </span>
+                ) : (
+                  <span className="rpts-watch-delta mono small"
+                    data-dir={d.delta > 0 ? "up" : d.delta < 0 ? "down" : "flat"}>
+                    → {d.latest.score}{" "}
+                    ({d.delta > 0 ? `▲ +${d.delta}` : d.delta < 0 ? `▼ ${d.delta}` : "± 0"})
+                  </span>
+                )}
+                <span className="rpts-watch-actions">
+                  {d.latest && (
+                    <button className="rep-action small"
+                      disabled={openingId === d.latest.job_id}
+                      onClick={() => openReport(d.latest)}>
+                      {openingId === d.latest.job_id ? "Opening…" : "Open latest →"}
+                    </button>
+                  )}
+                  <button className="rep-action small"
+                    onClick={() => onReanalyse(w.company_name)}>
+                    Re-analyse ↻
+                  </button>
+                  <button className="rep-action small on"
+                    title="Remove from watchlist" aria-label="★"
+                    onClick={() => onToggleWatch(w)}>
+                    ★
+                  </button>
+                </span>
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       {/* PROD-1 L2: the comparison bar exists only while a pick is live —
           no orphaned chrome on an unselected list. One pick states what's
@@ -650,6 +703,14 @@ export default function App() {
   const goReports = ()             => setRoute({ name: "reports" });
   const goAnalyze = (claim, query) => setRoute({ name: "analysis", claim, query });
   const goCompare = (rows)         => setRoute({ name: "compare", rows });
+
+  // PROD-1 L3: the local-first watchlist. Lives in localStorage (this is a
+  // real deployment, not an artifact sandbox) — loaded once, persisted on
+  // every change, and the UI is explicit that it's local to this browser.
+  const [watchlist, setWatchlist] = useState(() => loadWatchlist());
+  useEffect(() => { saveWatchlist(watchlist); }, [watchlist]);
+  const toggleWatchFor = (snap) => setWatchlist(l => toggleWatch(l, snap));
+  const reanalyse = (name) => goAnalyze(makeLiveClaim(name), name);
   // P3-12 (C-5): a report remembers where it was opened from, so both the
   // breadcrumb root and the ← button are honest about the way back.
   const goReport  = (claim, query, origin = "search") =>
@@ -695,7 +756,10 @@ export default function App() {
             <LandingScreen onAnalyze={goAnalyze} onMethodology={() => setMethOpen(true)}
               onOpenReport={goReport} />
           )}
-          {route.name === "reports"   && <ReportsScreen onOpenReport={goReport} onCompare={goCompare} />}
+          {route.name === "reports"   && (
+            <ReportsScreen onOpenReport={goReport} onCompare={goCompare}
+              watchlist={watchlist} onToggleWatch={toggleWatchFor} onReanalyse={reanalyse} />
+          )}
           {route.name === "compare"   && (
             <CompareScreen rows={route.rows} makeClaim={makeLiveClaim} onBack={goReports} />
           )}
@@ -713,6 +777,8 @@ export default function App() {
               query={route.query}
               origin={route.origin}
               scoreVariant={t.scoreVariant}
+              watched={isWatched(watchlist, route.claim?.company_name || route.claim?.headline)}
+              onToggleWatch={() => toggleWatchFor(watchSnapshot(route.claim))}
               onBack={() => (route.origin === "reports" ? goReports() : goSearch())}
               onOpenEvidence={(c, e) => setEvidenceOpen({ claim: c, ev: e })}
             />
