@@ -2,6 +2,7 @@
 // FR-34: Each scoring dimension now displays its regulatory standard badge.
 import { useState, useEffect, useRef, useMemo } from "react";
 import { toHref } from "../utils.js";
+import { regRefs } from "../regmap.js";
 
 // ───────────────────────────────────────────────────────────── helpers
 export function riskBand(score) {
@@ -308,6 +309,25 @@ export function EvidenceRow({ ev, index, onOpen }) {
   );
 }
 
+// ───────────────────────────────────────────────────────────── RegChips
+// PROD-2: the regulation clauses a compliance reader would check first
+// for this flag type. Chip shows the short code; the full regulation name
+// travels as the tooltip. Unknown type → renders nothing (regmap returns
+// [] rather than inventing a citation).
+export function RegChips({ type }) {
+  const refs = regRefs(type);
+  if (!refs.length) return null;
+  return (
+    <span className="reg-chips">
+      {refs.map(r => (
+        <span key={r.short} className="reg-chip mono" title={`${r.reg} — ${r.ref}`}>
+          {r.short}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 // ───────────────────────────────────────────────────────────── FlagCard
 export function FlagCard({ flag, idx, onSourceClick }) {
   const sev = flag.severity || "medium";
@@ -321,6 +341,7 @@ export function FlagCard({ flag, idx, onSourceClick }) {
         </span>
       </div>
       <div className="flag-card-desc">{flag.description}</div>
+      <RegChips type={flag.type} />
       {onSourceClick ? (
         // Auditability: clicking the source line opens the Evidence Drawer at
         // the matching evidence item (flag → evidence traceability).

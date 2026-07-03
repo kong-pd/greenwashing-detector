@@ -8,7 +8,7 @@
 // "medium" — the same convention the backend normaliser uses — so legacy
 // flag payloads never sink below rated ones by accident.
 import { describe, it, expect } from "vitest";
-import { toggleSelection, topFlags } from "../screens/CompareScreen.jsx";
+import { toggleSelection, topFlags, diffFlags } from "../screens/CompareScreen.jsx";
 
 const row = (job_id) => ({ job_id, company_name: job_id.toUpperCase() });
 
@@ -74,5 +74,40 @@ describe("topFlags", () => {
   it("tolerates empty and non-array input", () => {
     expect(topFlags([])).toEqual([]);
     expect(topFlags(undefined)).toEqual([]);
+  });
+});
+
+describe("diffFlags (PROD-3 — same company, two runs)", () => {
+  const f = (type, severity = "medium") => ({ type, severity, description: type });
+
+  it("splits by TYPE into resolved / added / kept, objects from the right side", () => {
+    const older = [f("Vague Claims"), f("Data Contradiction", "high")];
+    const newer = [f("Data Contradiction", "high"), f("Negative News", "high")];
+    const d = diffFlags(older, newer);
+    expect(d.resolved.map(x => x.type)).toEqual(["Vague Claims"]);        // from older
+    expect(d.added.map(x => x.type)).toEqual(["Negative News"]);          // from newer
+    expect(d.kept.map(x => x.type)).toEqual(["Data Contradiction"]);      // from newer
+  });
+
+  it("identical runs → nothing added or resolved", () => {
+    const flags = [f("Vague Claims"), f("Negative News")];
+    const d = diffFlags(flags, [...flags]);
+    expect(d.added).toEqual([]);
+    expect(d.resolved).toEqual([]);
+    expect(d.kept.map(x => x.type)).toEqual(["Vague Claims", "Negative News"]);
+  });
+
+  it("preserves input order within each bucket and never mutates", () => {
+    const older = [f("A"), f("B"), f("C")];
+    const newer = [f("C"), f("D")];
+    const d = diffFlags(older, newer);
+    expect(d.resolved.map(x => x.type)).toEqual(["A", "B"]);
+    expect(older).toHaveLength(3);
+  });
+
+  it("tolerates empty / undefined sides", () => {
+    expect(diffFlags(undefined, [f("A")]).added.map(x => x.type)).toEqual(["A"]);
+    expect(diffFlags([f("A")], undefined).resolved.map(x => x.type)).toEqual(["A"]);
+    expect(diffFlags(undefined, undefined)).toEqual({ added: [], resolved: [], kept: [] });
   });
 });

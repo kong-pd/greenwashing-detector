@@ -69,11 +69,17 @@ test("with Supabase up, db-sourced rows dedupe, drop the session tag, and multi-
   const idA = await seed(page, CO_A);
   const idB = await seed(page, CO_B);
 
+  // Time-bomb lesson (found when the container clock crossed noon UTC):
+  // hardcoded stub timestamps eventually sort BELOW the accumulating relay
+  // rows' real timestamps, and the db-wins dedupe then stamps the seeds
+  // with the stale time — pushing them off the capped list. Stub rows must
+  // be relative to now: always the newest, deterministic forever.
+  const ts = (secAgo) => new Date(Date.now() - secAgo * 1000).toISOString();
   await startStub([
     { id: idA, company_name: CO_A, score: 72, risk_level: "High Risk",
-      completed_at: "2026-07-03T12:00:00+00:00" },
+      completed_at: ts(0) },
     { id: idB, company_name: CO_B, score: 72, risk_level: "High Risk",
-      completed_at: "2026-07-03T11:00:00+00:00" },
+      completed_at: ts(30) },
   ]);
 
   await page.goto("/");
