@@ -19,6 +19,13 @@ capability. This boundary shrinks that residual risk:
 """
 import re
 
+import os
+import sys
+
+# Standalone-import safety: do not depend on an alphabetically earlier test
+# file having inserted the analysis dir first (the CI free-ride trap).
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from analyzer import build_user_prompt, SYSTEM_PROMPT, RUBRIC_VERSION
 
 SENTINEL_OPEN  = re.compile(r"<<<UNTRUSTED [A-Z ]+>>>")

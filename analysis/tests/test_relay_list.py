@@ -13,6 +13,13 @@ result. This endpoint is its plural: the web-service merges it into
     keeping the "no debug payloads to the browser" red line intact;
   * newest completed_at first, mirroring the Supabase history query.
 """
+import os
+import sys
+
+# Standalone-import safety: do not depend on an alphabetically earlier test
+# file having inserted the analysis dir first (the CI free-ride trap).
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import pytest
 from fastapi.testclient import TestClient
 
