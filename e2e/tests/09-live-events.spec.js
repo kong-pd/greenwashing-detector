@@ -33,7 +33,9 @@ test("live run: event log shows real trace events, fake queries are gone", async
   // The report binds what the pipeline actually recorded.
   await expectReport(page, { score: 72, risk: "High Risk" });
   await expect(page.getByText("mock (layer 1)").first()).toBeVisible(); // masthead + byline both bind
-  await expect(page.getByText(/rubric v3\.2/).first()).toBeVisible();
+  // Pins the EXACT current rubric version — silent drift must fail here.
+  // v3.3 = SEC-2 trust-boundary prompt (2026-07-03).
+  await expect(page.getByText(/rubric v3\.3/).first()).toBeVisible();
 });
 
 test("cache hit: the one honest event is shown instead of fake queries", async ({ page }) => {

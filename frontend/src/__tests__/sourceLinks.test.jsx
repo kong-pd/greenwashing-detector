@@ -37,6 +37,40 @@ describe("toHref", () => {
     expect(toHref(undefined)).toBeNull();
     expect(toHref(42)).toBeNull();
   });
+
+  // ── SEC-1: dangerous schemes are REJECTED, not laundered ──────────────────
+  // Historical accident worth pinning: the https:// prefix already made
+  // scheme injection non-executable ("javascript:x" → "https://javascript:x",
+  // a dead link). The upgrade: known-dangerous schemes now return null so the
+  // UI renders the honest non-link state instead of manufactured junk.
+  it("rejects dangerous schemes outright", () => {
+    expect(toHref("javascript:alert(1)")).toBeNull();
+    expect(toHref("JaVaScRiPt:alert(1)")).toBeNull();
+    expect(toHref("data:text/html,<script>alert(1)</script>")).toBeNull();
+    expect(toHref("vbscript:msgbox(1)")).toBeNull();
+    expect(toHref("file:///etc/passwd")).toBeNull();
+    expect(toHref("blob:https://evil.example/uuid")).toBeNull();
+  });
+
+  it("rejects scheme smuggling via embedded whitespace/control chars", () => {
+    expect(toHref("java\tscript:alert(1)")).toBeNull();
+    expect(toHref("java\nscript:alert(1)")).toBeNull();
+    expect(toHref("\u0000javascript:alert(1)")).toBeNull();
+  });
+
+  it("INVARIANT: every non-null output is an http(s) URL — for ANY input", () => {
+    const nasty = [
+      "javascript:alert(1)", "data:x", "vbscript:x", "file:///x", "blob:x",
+      "//evil.example", "\\\\evil.example", "ftp://evil.example",
+      "java\tscript:x", " javascript:x", "mailto:a@b.c",
+      "reuters.com", "https://ft.com", "HTTP://x.y", "internal", "", "  ",
+      "https://ok.com/path?q=1#f", "sub.domain.co.uk/deep/path",
+    ];
+    for (const input of nasty) {
+      const out = toHref(input);
+      expect(out === null || /^https?:\/\//i.test(out)).toBe(true);
+    }
+  });
 });
 
 // ── EvidenceRow link rendering ───────────────────────────────────────────────
