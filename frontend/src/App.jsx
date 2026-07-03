@@ -7,16 +7,16 @@
 //   US-05: WatchlistScreen handleAnalyse also uses templateClaim
 
 import React, { useState, useEffect, useMemo } from "react";
-import { gwdToast } from "./toast.js";
 import { riskBand, bandColor, DimensionBars, RiskPill, DIMENSION_META, MethodologyPanel } from "./components/SharedComponents.jsx";
 import {
   useTweaks, TweaksPanel,
   TweakSection, TweakColor, TweakRadio, TweakSelect, TweakToggle,
 } from "./components/TweaksPanel.jsx";
 import { Toaster } from "./components/Interactions.jsx";
-import { AnalysisScreen, normalise } from "./screens/AnalysisScreen.jsx";
+import { AnalysisScreen } from "./screens/AnalysisScreen.jsx";
 import { ReportScreen, EvidenceDrawer } from "./screens/ReportScreen.jsx";
-import { getReport } from "./api/client.js";
+import { fetchHistory } from "./api/client.js";
+import { useOpenReport, recentCards } from "./hooks/useOpenReport.js";
 
 const TWEAK_DEFAULTS = {
   palette: "sage",
@@ -138,7 +138,7 @@ const TABS = [
   },
 ];
 
-function LandingScreen({ onAnalyze, onMethodology }) {
+function LandingScreen({ onAnalyze, onMethodology, onOpenReport }) {
   const [activeTab, setActiveTab]     = useState("company");
   const [inputValue, setInputValue]   = useState("");
   const [claimCompany, setClaimCompany] = useState(""); // P2-6: company behind a pasted claim
@@ -147,6 +147,22 @@ function LandingScreen({ onAnalyze, onMethodology }) {
   const [uploading,    setUploading]   = useState(false);  // FR-02: reading state
   const inputRef = React.useRef(null);
   const tab = TABS.find(t => t.id === activeTab);
+
+  // PROD-1 L1: recent analyses from the merged /api/history (DB + NFR-09
+  // relay). The strip is strictly optional decoration on the landing page —
+  // a dead backend means no strip, never a blocked or noisy landing.
+  const [recent, setRecent] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    fetchHistory()
+      .then(d => { if (alive) setRecent(recentCards(d.results)); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  const { openingId, openReport } = useOpenReport(
+    (full, name) => onOpenReport(full, name, "search"),
+    makeLiveClaim,
+  );
 
   useEffect(() => { inputRef.current?.focus(); }, [activeTab]);
   useEffect(() => {
@@ -336,6 +352,44 @@ function LandingScreen({ onAnalyze, onMethodology }) {
             </button>
           </nav>
 
+          {/* PROD-1 L1: the surface the audit removed as a dead Petrovera
+              door (07 still pins the absence of THAT button), earned back
+              with real rows. Cards open the full report through the same
+              C-2-hardened path as the Reports list. Empty history → no
+              section at all. Rows living only in the in-memory relay are
+              labelled "this session" — the FIFO(50) forgets on restart,
+              and the UI must not imply otherwise. */}
+          {recent.length > 0 && (
+            <section className="lv2-recent" aria-label="Recent analyses">
+              <p className="lv2-recent-lbl mono">RECENT ANALYSES</p>
+              <div className="lv2-recent-row">
+                {recent.map(r => {
+                  const band = riskBand(r.score ?? 0);
+                  return (
+                    <button key={r.job_id} className="lv2-recent-card"
+                      disabled={!!openingId}
+                      aria-busy={openingId === r.job_id}
+                      onClick={() => openReport(r)}>
+                      <span className="lv2-recent-co">{r.company_name}</span>
+                      <span className="lv2-recent-score mono" data-tone={band.tone}>
+                        {r.score ?? "—"}
+                      </span>
+                      <span className="lv2-recent-meta mono">
+                        {openingId === r.job_id ? "Opening…" : r.risk_level}
+                        {r.source === "relay" && (
+                          <em className="lv2-recent-session"
+                            title="Held in memory for this session — not yet persisted">
+                            this session
+                          </em>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
         </div>
       </div>
     </div>
@@ -403,28 +457,14 @@ function ReportsScreen({ onOpenReport }) {
     fetchHistory();
   }, []);
 
-  // C-2: a history row is a 5-field summary, not a report. Opening one
-  // fetches the full record through the real GET /api/report/{job_id}
-  // (DB first, NFR-09 relay fallback) and only navigates on success —
-  // the empty-shell report is gone for good.
-  const [openingId, setOpeningId] = useState(null);
-  async function openReport(r) {
-    if (openingId) return;
-    setOpeningId(r.job_id);
-    try {
-      const raw  = await getReport(r.job_id);
-      const full = normalise(raw, makeLiveClaim(r.company_name || "Unknown"));
-      if (!full) {
-        gwdToast("Report no longer available — it may have expired", { kind: "warn" });
-        return;
-      }
-      onOpenReport(full, r.company_name, "reports");
-    } catch {
-      gwdToast("Couldn't load the report — backend unreachable", { kind: "warn" });
-    } finally {
-      setOpeningId(null);
-    }
-  }
+  // C-2: a history row is a 5-field summary, not a report. Opening one goes
+  // through the shared useOpenReport hook — the SAME path the landing strip
+  // uses — which fetches the full record via GET /api/report/{job_id}
+  // (DB first, NFR-09 relay fallback) and only navigates on success.
+  const { openingId, openReport } = useOpenReport(
+    (full, name) => onOpenReport(full, name, "reports"),
+    makeLiveClaim,
+  );
 
   return (
     <div className="screen reports-screen">
@@ -459,6 +499,12 @@ function ReportsScreen({ onOpenReport }) {
                 <div className="rpts-l">
                   <div className="rpts-meta mono small mute">
                     {r.job_id} · {(r.completed_at || "").slice(0, 10)}
+                    {r.source === "relay" && (
+                      <em className="rpts-session"
+                        title="Held in memory for this session — not yet persisted">
+                        this session
+                      </em>
+                    )}
                   </div>
                   <div className="rpts-title">{r.company_name}</div>
                   <div className="rpts-src mono small mute">
@@ -559,7 +605,10 @@ export default function App() {
 
       <div className="gwd-body">
         <main className="gwd-main">
-          {route.name === "landing"   && <LandingScreen onAnalyze={goAnalyze} onMethodology={() => setMethOpen(true)} />}
+          {route.name === "landing"   && (
+            <LandingScreen onAnalyze={goAnalyze} onMethodology={() => setMethOpen(true)}
+              onOpenReport={goReport} />
+          )}
           {route.name === "reports"   && <ReportsScreen onOpenReport={goReport} />}
           {route.name === "analysis"  && (
             <AnalysisScreen

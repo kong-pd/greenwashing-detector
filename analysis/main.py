@@ -213,6 +213,32 @@ def relay_result(job_id: str):
     return {"status": "unknown", "job_id": job_id}
 
 
+@app.get("/relay")
+def relay_list():
+    """
+    PROD-1 L1: the plural of /result/{job_id}. Lists COMPLETED relay records
+    in the thin public shape so the web-service can merge them into
+    /api/history — analyses whose DB write failed still count as "recent".
+
+    Only the five list fields leave this endpoint; the relay's full record
+    (summary, sources, events) stays server-side. In-memory FIFO(50): the
+    list is honest only about this process's lifetime, and the UI says so.
+    """
+    rows = [
+        {
+            "job_id":       rec.get("id"),
+            "company_name": rec.get("company_name"),
+            "score":        rec.get("score"),
+            "risk_level":   rec.get("risk_level"),
+            "completed_at": rec.get("completed_at"),
+        }
+        for rec in _RELAY.values()
+        if rec.get("status") == "completed"
+    ]
+    rows.sort(key=lambda r: r.get("completed_at") or "", reverse=True)
+    return {"results": rows}
+
+
 @app.post("/run")
 async def run(req: RunRequest):
     asyncio.create_task(process(req))
