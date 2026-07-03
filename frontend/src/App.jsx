@@ -15,6 +15,7 @@ import {
 import { Toaster } from "./components/Interactions.jsx";
 import { AnalysisScreen } from "./screens/AnalysisScreen.jsx";
 import { ReportScreen, EvidenceDrawer } from "./screens/ReportScreen.jsx";
+import { CompareScreen, toggleSelection } from "./screens/CompareScreen.jsx";
 import { fetchHistory } from "./api/client.js";
 import { useOpenReport, recentCards } from "./hooks/useOpenReport.js";
 
@@ -145,6 +146,10 @@ function LandingScreen({ onAnalyze, onMethodology, onOpenReport }) {
   const [validationMsg, setValidationMsg] = useState("");
   const [uploadFile,   setUploadFile]  = useState(null);   // FR-02: uploaded PDF file
   const [uploading,    setUploading]   = useState(false);  // FR-02: reading state
+  // UX-2: extraction result awaiting the user's confirmation. A filename is
+  // a SUGGESTION for the company name, never an identity — "Assignmentll.pdf"
+  // must not silently become an analysis of a company called "Assignmentll".
+  const [pendingUpload, setPendingUpload] = useState(null); // { name, content }
   const inputRef = React.useRef(null);
   const tab = TABS.find(t => t.id === activeTab);
 
@@ -172,7 +177,9 @@ function LandingScreen({ onAnalyze, onMethodology, onOpenReport }) {
     }
   }, [validationMsg]);
 
-  // FR-02: handle PDF file selection → read as text → trigger analysis
+  // FR-02 + UX-2: file selection → read as text → PAUSE at a confirm step.
+  // The pipeline only starts from handleUploadConfirm, under the name the
+  // user approved (prefilled from the filename as a best-effort default).
   function handleFileChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -182,20 +189,30 @@ function LandingScreen({ onAnalyze, onMethodology, onOpenReport }) {
     }
     setUploadFile(file);
     setUploading(true);
+    setPendingUpload(null);
     const reader = new FileReader();
     reader.onload = (ev) => {
       setUploading(false);
       const content = ev.target.result;
-      const companyName = file.name.replace(/\.pdf$/i, "").replace(/[-_]/g, " ");
-      const claim = makeLiveClaim(companyName);
-      // Pass extracted text as manual_content so backend skips scraping
-      onAnalyze({ ...claim, _manualContent: content }, companyName);
+      const suggested = file.name.replace(/\.pdf$/i, "").replace(/[-_]/g, " ");
+      setPendingUpload({ name: suggested, content });
     };
     reader.onerror = () => {
       setUploading(false);
       setValidationMsg("Could not read the file — try pasting the content instead");
     };
     reader.readAsText(file);
+  }
+
+  // UX-2: the explicit start. Extracted text rides as manual_content so the
+  // backend skips scraping (same threading as the Claim tab, E2E 08).
+  function handleUploadConfirm() {
+    const name = (pendingUpload?.name || "").trim();
+    if (!name) {
+      setValidationMsg("Name the company behind this report");
+      return;
+    }
+    onAnalyze({ ...makeLiveClaim(name), _manualContent: pendingUpload.content }, name);
   }
 
   // US-01: search triggers analysis pipeline. Every input becomes a LIVE
@@ -242,7 +259,7 @@ function LandingScreen({ onAnalyze, onMethodology, onOpenReport }) {
               {TABS.map(t => (
                 <button key={t.id} role="tab" aria-selected={activeTab === t.id}
                   className={"lv2-tab" + (activeTab === t.id ? " on" : "")}
-                  onClick={() => { setActiveTab(t.id); setInputValue(""); setValidationMsg(""); setUploadFile(null); }}>
+                  onClick={() => { setActiveTab(t.id); setInputValue(""); setValidationMsg(""); setUploadFile(null); setPendingUpload(null); }}>
                   {t.label}
                 </button>
               ))}
@@ -287,7 +304,7 @@ function LandingScreen({ onAnalyze, onMethodology, onOpenReport }) {
                     <span>
                       {uploadFile.name}
                       <button style={{ marginLeft: 10, color: "rgba(255,255,255,.5)", fontSize: 11 }}
-                        onClick={e => { e.preventDefault(); setUploadFile(null); }}>✕</button>
+                        onClick={e => { e.preventDefault(); setUploadFile(null); setPendingUpload(null); }}>✕</button>
                     </span>
                   ) : (
                     <span>Drop a PDF or <span className="lv2-upload-link">browse files</span> — max 10 MB</span>
@@ -323,6 +340,37 @@ function LandingScreen({ onAnalyze, onMethodology, onOpenReport }) {
                 </>
               )}
             </div>
+            )}
+
+            {/* UX-2: the confirm step — editable identity + extraction
+                preview. Analysis starts HERE, never from file selection. */}
+            {activeTab === "upload" && pendingUpload && (
+              <div className="lv2-upload-confirm">
+                <div className={"lv2-input-box" + (validationMsg ? " invalid" : "")}>
+                  <input
+                    value={pendingUpload.name}
+                    onChange={e => {
+                      setPendingUpload({ ...pendingUpload, name: e.target.value });
+                      setValidationMsg("");
+                    }}
+                    placeholder="Company behind this report — edit if the filename got it wrong"
+                    className="lv2-input"
+                    autoFocus
+                  />
+                </div>
+                <div className="lv2-upload-preview mono">
+                  <span className="lv2-upload-preview-meta">
+                    EXTRACTED · {pendingUpload.content.length.toLocaleString()} chars
+                  </span>
+                  {pendingUpload.content.slice(0, 240)}
+                  {pendingUpload.content.length > 240 ? "…" : ""}
+                </div>
+                <button
+                  className={"lv2-btn confirm" + (pendingUpload.name.trim() ? "" : " dim")}
+                  onClick={handleUploadConfirm}>
+                  Analyse →
+                </button>
+              </div>
             )}
 
             {/* US-01 AC2: validation message */}
@@ -435,10 +483,13 @@ function BrandMark() {
 // ─────────────────────────────────────────────── Reports screen
 // FR-29: ReportsScreen now calls GET /api/history for real data.
 // Falls back to empty state (not Petrovera demo data) if API is unavailable.
-function ReportsScreen({ onOpenReport }) {
+function ReportsScreen({ onOpenReport, onCompare }) {
   const [reports,  setReports]  = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [apiError, setApiError] = useState(false);
+  // PROD-1 L2: the comparison pick queue (cap 2, oldest yields — see
+  // toggleSelection's contract in CompareScreen.jsx).
+  const [compareSel, setCompareSel] = useState([]);
 
   useEffect(() => {
     async function fetchHistory() {
@@ -482,6 +533,27 @@ function ReportsScreen({ onOpenReport }) {
         </div>
       </header>
 
+      {/* PROD-1 L2: the comparison bar exists only while a pick is live —
+          no orphaned chrome on an unselected list. One pick states what's
+          missing; two picks name both sides and offer the real action. */}
+      {compareSel.length > 0 && (
+        <div className="rpts-compare-bar">
+          <span className="rpts-compare-names mono small">
+            {compareSel.map(x => x.company_name).join("  ·  ")}
+          </span>
+          {compareSel.length === 2 ? (
+            <button className="rep-action small cmp-go"
+              onClick={() => onCompare(compareSel)}>
+              Compare →
+            </button>
+          ) : (
+            <span className="small mute">Select one more report to compare</span>
+          )}
+          <button className="rpts-compare-clear" aria-label="Clear selection"
+            onClick={() => setCompareSel([])}>✕</button>
+        </div>
+      )}
+
       {loading ? (
         <div className="mono small mute" style={{ padding: "48px 4px" }}>
           Loading history<span className="dots"><span/><span/><span/></span>
@@ -522,6 +594,19 @@ function ReportsScreen({ onOpenReport }) {
                   <div className="rpts-band small mute">{r.risk_level}</div>
                 </div>
                 <div className="rpts-actions">
+                  {(() => {
+                    const isSel = compareSel.some(x => x.job_id === r.job_id);
+                    return (
+                      <button className={"rep-action small" + (isSel ? " on" : "")}
+                        aria-pressed={isSel}
+                        onClick={e => {
+                          e.stopPropagation();
+                          setCompareSel(s => toggleSelection(s, r));
+                        }}>
+                        {isSel ? "Selected" : "Select"}
+                      </button>
+                    );
+                  })()}
                   <button className="rep-action small"
                     disabled={openingId === r.job_id}
                     onClick={e => { e.stopPropagation(); openReport(r); }}>
@@ -564,6 +649,7 @@ export default function App() {
   const goSearch  = ()             => setRoute({ name: "landing" });
   const goReports = ()             => setRoute({ name: "reports" });
   const goAnalyze = (claim, query) => setRoute({ name: "analysis", claim, query });
+  const goCompare = (rows)         => setRoute({ name: "compare", rows });
   // P3-12 (C-5): a report remembers where it was opened from, so both the
   // breadcrumb root and the ← button are honest about the way back.
   const goReport  = (claim, query, origin = "search") =>
@@ -609,7 +695,10 @@ export default function App() {
             <LandingScreen onAnalyze={goAnalyze} onMethodology={() => setMethOpen(true)}
               onOpenReport={goReport} />
           )}
-          {route.name === "reports"   && <ReportsScreen onOpenReport={goReport} />}
+          {route.name === "reports"   && <ReportsScreen onOpenReport={goReport} onCompare={goCompare} />}
+          {route.name === "compare"   && (
+            <CompareScreen rows={route.rows} makeClaim={makeLiveClaim} onBack={goReports} />
+          )}
           {route.name === "analysis"  && (
             <AnalysisScreen
               claim={route.claim}

@@ -77,8 +77,11 @@ h1, h2, h3, h4, h5 { margin: 0; font-weight: 500; }
   flex-direction: column;
 }
 .gwd-body {
-  display: grid;
-  grid-template-columns: 260px 1fr;
+  /* P2-5 aftermath, fixed in PROD-1 L2: this was `grid-template-columns:
+     260px 1fr` for the (removed) sidebar. With the sidebar gone, `reports`
+     — a sidebar route never covered by the per-route overrides — fell into
+     the 260px ghost track. No sidebar exists anywhere now: one column,
+     every route. */
   flex: 1;
   min-height: 0;
 }
@@ -349,6 +352,130 @@ h1, h2, h3, h4, h5 { margin: 0; font-weight: 500; }
 .rpts-band { margin-top: 2px; }
 .rpts-actions { display: flex; gap: 6px; }
 
+/* PROD-1 L2: comparison pick + bar + screen */
+.rep-action.on {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+  background: color-mix(in srgb, var(--c-accent), transparent 92%);
+}
+.rpts-compare-bar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border: .5px solid var(--c-line-2);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+}
+.rpts-compare-names { flex: 1; color: var(--c-ink-1); letter-spacing: .02em; }
+.rep-action.cmp-go {
+  border-color: var(--c-accent);
+  background: var(--c-accent);
+  color: #fff;
+}
+.rep-action.cmp-go:hover { background: var(--c-accent-2); }
+.rpts-compare-clear {
+  color: var(--c-ink-3);
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.rpts-compare-clear:hover { color: var(--c-ink-0); background: var(--c-bg-2); }
+
+.cmp-back { display: inline-block; margin-bottom: 14px; cursor: pointer; }
+.cmp-back:hover { color: var(--c-ink-0); }
+.cmp-error {
+  border: .5px solid var(--c-line-2);
+  border-radius: var(--r-lg);
+  padding: 22px 24px;
+  max-width: 520px;
+}
+.cmp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 4px;
+}
+.cmp-col {
+  border: .5px solid var(--c-line);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  padding: 20px 22px;
+}
+.cmp-co {
+  font-family: var(--display-family);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -.01em;
+  color: var(--c-ink-0);
+  margin: 0 0 10px;
+}
+.cmp-flags { margin-top: 18px; }
+.cmp-flags-lbl { letter-spacing: .08em; margin-bottom: 4px; }
+.cmp-flag { padding: 9px 0; border-top: .5px solid var(--c-line); }
+.cmp-flag-type {
+  display: flex; align-items: center; gap: 7px;
+  font-weight: 500; color: var(--c-ink-0);
+}
+.cmp-flag-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.cmp-flag[data-sev="high"]   .cmp-flag-dot { background: var(--c-bad); }
+.cmp-flag[data-sev="medium"] .cmp-flag-dot { background: var(--c-warn); }
+.cmp-flag[data-sev="low"]    .cmp-flag-dot { background: var(--c-ok); }
+.cmp-flag-desc {
+  margin: 4px 0 0 13px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Mirrored dimension bars: both sides grow toward each other from the
+   shared label spine — longer reads as worse on BOTH sides, no legend
+   lookup needed. */
+.cmp-dims {
+  margin-top: 26px;
+  border: .5px solid var(--c-line);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  padding: 16px 22px 12px;
+}
+.cmp-dims-legend,
+.cmp-dim-row {
+  display: grid;
+  grid-template-columns: 34px 1fr 180px 1fr 34px;
+  align-items: center;
+  gap: 12px;
+}
+.cmp-dims-legend { padding-bottom: 8px; letter-spacing: .04em; }
+.cmp-legend-a { grid-column: 1 / 3; }
+.cmp-legend-b { grid-column: 4 / 6; text-align: right; }
+.cmp-dim-row { padding: 8px 0; border-top: .5px solid var(--c-line); }
+.cmp-dim-label { text-align: center; color: var(--c-ink-1); }
+.cmp-dim-bar {
+  height: 8px;
+  background: var(--c-bg-2);
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+}
+.cmp-dim-bar.left { justify-content: flex-end; }
+.cmp-dim-fill { height: 100%; border-radius: 4px; transition: width .3s; }
+.cmp-dim-fill[data-tone="bad"]  { background: var(--c-bad); }
+.cmp-dim-fill[data-tone="warn"] { background: var(--c-warn); }
+.cmp-dim-fill[data-tone="ok"]   { background: var(--c-ok); }
+.cmp-dim-val { font-size: 12px; }
+.cmp-dim-val.right { text-align: right; }
+.cmp-dim-val[data-tone="bad"]  { color: var(--c-bad); }
+.cmp-dim-val[data-tone="warn"] { color: var(--c-warn); }
+.cmp-dim-val[data-tone="ok"]   { color: var(--c-ok); }
+.cmp-dims-note { margin: 10px 0 0; text-align: center; letter-spacing: .04em; }
+
+@media (max-width: 760px) {
+  .cmp-grid { grid-template-columns: 1fr; }
+  .cmp-dims-legend, .cmp-dim-row { grid-template-columns: 26px 1fr 108px 1fr 26px; gap: 8px; }
+  .cmp-dim-label { font-size: 10px; }
+}
+
 /* ─────────────────────────────────────── screens common */
 .screen { padding: 28px 36px 64px; max-width: 1240px; }
 
@@ -591,6 +718,46 @@ h1, h2, h3, h4, h5 { margin: 0; font-weight: 500; }
   margin-left: 8px;
   border-color: var(--c-line-2);
   color: var(--c-ink-3);
+}
+
+/* Upload confirm step (UX-2) — same stacked white-card language as the
+   claim form: identity field, extraction preview, one explicit start. */
+.lv2-upload-confirm {
+  display: flex; flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  text-align: left;
+}
+.lv2-upload-confirm .lv2-input-box {
+  background: rgba(255,255,255,.96);
+  border-radius: 8px;
+  min-height: 48px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.12);
+}
+.lv2-upload-preview {
+  background: rgba(255,255,255,.08);
+  border: .5px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: rgba(255,255,255,.55);
+  max-height: 92px;
+  overflow: hidden;
+  word-break: break-word;
+}
+.lv2-upload-preview-meta {
+  display: block;
+  font-size: 9px;
+  letter-spacing: .12em;
+  color: rgba(255,255,255,.32);
+  margin-bottom: 5px;
+}
+.lv2-btn.confirm {
+  align-self: flex-end;
+  border-left: none;
+  border-radius: 8px;
+  padding: 11px 26px;
 }
 
 
@@ -1648,16 +1815,6 @@ h1, h2, h3, h4, h5 { margin: 0; font-weight: 500; }
 
 /* ─────────────────────────────────────── landing route overrides */
 /* ─────────────────────────────────────── landing route overrides */
-/* Routes WITHOUT a sidebar — reset to full-width single column.
-   Sidebar only appears on: company, watchlist, reports.
-   Everything else (landing, analysis, report) must override the base 260px 1fr grid. */
-[data-route="landing"] .gwd-body,
-[data-route="analysis"] .gwd-body,
-[data-route="report"] .gwd-body {
-  grid-template-columns: 1fr;
-}
-
-
 /* Ticker is noise on the entry screen — hide it */
 [data-route="landing"] .ticker {
   display: none;

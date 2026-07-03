@@ -34,7 +34,18 @@ test("Claim tab: pasted claim + company name run the real manual pipeline", asyn
   await expect(page.locator(".rep-crumb-co")).toHaveText("Nordwind Energy");
 });
 
-test("Report-PDF tab: extracted file text reaches the pipeline as manual content", async ({ page }) => {
+test("Report-PDF tab: upload pauses at a confirm step; the EDITED name runs the pipeline", async ({ page }) => {
+  // UX-2 (roadmap §七): a filename is a SUGGESTION, not an identity. The
+  // real bug: "Assignmentll.pdf" auto-started an analysis for a company
+  // called "Assignmentll". The contract now: extraction → confirm panel
+  // (editable name prefilled from the filename + content preview) → the
+  // pipeline only starts on explicit confirm, under the name the USER set.
+  let analyzeCalled = false;
+  await page.route("**/api/analyze", (route) => {
+    analyzeCalled = true;
+    route.continue();
+  });
+
   await page.goto("/");
   await page.getByRole("tab", { name: "Report PDF" }).click();
 
@@ -49,12 +60,28 @@ test("Report-PDF tab: extracted file text reaches the pipeline as manual content
     ),
   });
 
-  // Regression pin for the discovered bug: the old code dropped the text
-  // and fell into the scrape-failure screen. The fixed path goes straight
-  // to a MANUAL INPUT run and completes.
+  // ── The confirm step: nothing has been analysed yet ──────────────────────
+  const confirm = page.locator(".lv2-upload-confirm");
+  await expect(confirm).toBeVisible();
+  expect(analyzeCalled).toBe(false);
+
+  // Name is prefilled from the filename (still a useful default)…
+  const nameInput = confirm.getByPlaceholder(/Company behind this report/);
+  await expect(nameInput).toHaveValue("Baltic Paper Group");
+  // …and the extracted text is previewed so the user can sanity-check it.
+  await expect(confirm.locator(".lv2-upload-preview"))
+    .toContainText("Net-zero by 2045");
+
+  // The user corrects the identity — the whole point of the step.
+  await nameInput.fill("Baltic Paper AG");
+  await confirm.getByRole("button", { name: "Analyse →" }).click();
+
+  // Regression pin for the original threading bug: the extracted text goes
+  // straight into a MANUAL INPUT run — never the scrape-failure screen.
   await expect(page.locator(".ana-context-ticker")).toHaveText("MANUAL INPUT");
+  await expect(page.locator(".ana-context-co")).toHaveText("Baltic Paper AG");
   await expect(page.getByText("ESG PAGE NOT FOUND", { exact: true })).toHaveCount(0);
 
   await expectReport(page, { score: 72, risk: "High Risk" });
-  await expect(page.locator(".rep-crumb-co")).toHaveText("Baltic Paper Group");
+  await expect(page.locator(".rep-crumb-co")).toHaveText("Baltic Paper AG");
 });
