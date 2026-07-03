@@ -136,6 +136,65 @@ def _relay_lookup(job_id: str) -> dict | None:
     return record
 
 
+def _fetch_relay_history() -> list[dict]:
+    """List view of the relay (PROD-1 L1). Contract: [] on ANY failure —
+    a dead analysis-service degrades /api/history to the DB view, never 500s."""
+    analysis_url = os.environ.get("ANALYSIS_SERVICE_URL", "http://localhost:8001")
+    try:
+        res = httpx.get(f"{analysis_url}/relay", timeout=3)
+        res.raise_for_status()
+        rows = res.json().get("results") or []
+    except Exception as e:
+        print(f"relay history fetch failed (degrading to DB view): {e}")
+        return []
+    return rows if isinstance(rows, list) else []
+
+
+_HISTORY_LIMIT = 10
+
+
+def merge_history(db_rows: list[dict], relay_rows: list[dict]) -> list[dict]:
+    """
+    One recent-analyses view over two sources of truth (PROD-1 L1).
+
+    The analyses a user JUST ran are exactly the ones most likely to be
+    missing from Supabase (free-tier outage, failed write) — and exactly
+    the ones a "recent" surface exists for. So the list is always the
+    merge, not a fallback-only read:
+
+      * dedupe by job_id; on collision the DB row wins (persisted = canonical);
+      * every row carries source: "db" | "relay" so the UI can be honest
+        that relay rows live in a FIFO(50) and vanish on service restart;
+      * rows are re-thinned here whatever the sources carried — the
+        "no debug payloads to the browser" red line holds at this boundary;
+      * global completed_at desc sort (None-safe: undated legacy rows sink),
+        capped at the same 10 the DB query used.
+    """
+    def thin(row: dict, source: str) -> dict:
+        return {
+            "job_id":       row.get("job_id"),
+            "company_name": row.get("company_name"),
+            "score":        row.get("score"),
+            "risk_level":   row.get("risk_level"),
+            "completed_at": row.get("completed_at"),
+            "source":       source,
+        }
+
+    merged: dict[str, dict] = {}
+    for row in relay_rows or []:
+        t = thin(row, "relay")
+        if t["job_id"]:
+            merged[t["job_id"]] = t
+    for row in db_rows or []:
+        t = thin(row, "db")
+        if t["job_id"]:
+            merged[t["job_id"]] = t   # overwrites the relay copy: DB wins
+
+    rows = sorted(merged.values(),
+                  key=lambda r: r.get("completed_at") or "", reverse=True)
+    return rows[:_HISTORY_LIMIT]
+
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @router.post("/analyze")
@@ -230,4 +289,7 @@ def download_pdf(job_id: str):
 
 @router.get("/history")
 def history():
-    return {"results": get_history()}
+    # Same composition pattern as GET /report/{job_id}: the DB read plus the
+    # NFR-09 relay, composed at the route — db/supabase.py stays a pure
+    # Supabase layer, relay access stays where _relay_lookup already lives.
+    return {"results": merge_history(get_history(), _fetch_relay_history())}
