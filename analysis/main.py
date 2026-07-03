@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from scraper import scrape
 from enricher import enrich
+from sanitize import sanitize_text, sanitize_evidence
 from analyzer import analyze
 from tracing import Trace, StageMeta, run_stage
 from relevance import check_relevance
@@ -301,6 +302,16 @@ async def process(req: RunRequest):
                            level="user", chars=len(content))
                 mark_degraded(req.job_id, fail_reason)
 
+        # ── Step 1.4: sanitise (SEC-3) ───────────────────────────────────────
+        # One seam for ALL analyzer-bound content — scraped, pasted, or
+        # PDF-extracted: strip control/zero-width smuggling characters,
+        # neutralise prompt sentinels at ingestion, cap length. Debug-level
+        # trace accounting: machinery, not Live-view news.
+        content, _san = sanitize_text(content)
+        trace.emit("sanitize", "success", "content_sanitised",
+                   removed=_san["removed"], truncated=_san["truncated"],
+                   chars=len(content))
+
         # ── Step 1.5: relevance gate (AI-1) ─────────────────────────────────
         # Runs on ALL content — scraped, pasted, or extracted from a PDF.
         # Off-topic input is refused before any model spends a token on it.
@@ -322,6 +333,10 @@ async def process(req: RunRequest):
         r = await run_stage(trace, StageMeta(name="enrich", kind="network"),
                             enrich, req.company_name)
         evidence_list, cdp_data = r.data if r.ok else ([], "No data")
+        evidence_list, _ev_removed = sanitize_evidence(evidence_list)
+        if _ev_removed:
+            trace.emit("sanitize", "success", "evidence_sanitised",
+                       removed=_ev_removed, items=len(evidence_list))
         trace.emit("enrich", "success", "sources_found",
                    level="user", sources=len(evidence_list))
         print(f"[{req.job_id}] enriched — "
