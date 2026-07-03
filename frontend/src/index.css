@@ -405,6 +405,55 @@ h1, h2, h3, h4, h5 { margin: 0; font-weight: 500; }
 }
 .rpts-compare-clear:hover { color: var(--c-ink-0); background: var(--c-bg-2); }
 
+/* PROD-2: regulation chips on flagged findings — tiny mono pills, full
+   regulation name travels as the tooltip. */
+.reg-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.reg-chip {
+  font-size: 9px;
+  letter-spacing: .03em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: .5px solid var(--c-line-2);
+  color: var(--c-ink-2);
+  background: var(--c-bg-2);
+  white-space: nowrap;
+  cursor: help;
+}
+.rep-flags-note { margin: 10px 2px 0; letter-spacing: .03em; }
+
+/* PROD-3: same-company mode — banner + change narrative */
+.cmp-same {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  border: .5px solid var(--c-line-2);
+  border-left: 3px solid var(--c-accent);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+}
+.cmp-same-lbl { letter-spacing: .1em; color: var(--c-ink-2); }
+.cmp-same-delta { font-size: 14px; }
+.cmp-same-delta[data-dir="up"]   { color: var(--c-bad); }
+.cmp-same-delta[data-dir="down"] { color: var(--c-ok); }
+.cmp-same-delta[data-dir="flat"] { color: var(--c-ink-2); }
+.cmp-run-tag { letter-spacing: .06em; margin-bottom: 4px; }
+.cmp-diff {
+  margin-top: 22px;
+  border: .5px solid var(--c-line);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  padding: 14px 22px;
+}
+.cmp-diff-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 0;
+  border-top: .5px solid var(--c-line);
+}
+.cmp-diff-row:first-of-type { border-top: 0; }
+.cmp-diff-row[data-kind="added"]    .cmp-diff-mark { color: var(--c-bad); }
+.cmp-diff-row[data-kind="resolved"] .cmp-diff-mark { color: var(--c-ok); }
+.cmp-diff-type { font-weight: 500; color: var(--c-ink-0); }
+
 .cmp-back { display: inline-block; margin-bottom: 14px; cursor: pointer; }
 .cmp-back:hover { color: var(--c-ink-0); }
 .cmp-error {

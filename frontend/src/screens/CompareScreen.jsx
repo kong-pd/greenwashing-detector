@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from "react";
 import { getReport } from "../api/client.js";
 import { normalise } from "./AnalysisScreen.jsx";
-import { DIMENSION_META, RiskPill } from "../components/SharedComponents.jsx";
+import { DIMENSION_META, RiskPill, RegChips } from "../components/SharedComponents.jsx";
 
 // ── Pure seams (vitest-covered) ──────────────────────────────────────────────
 
@@ -48,36 +48,73 @@ export function topFlags(flags, n = 3) {
     .map(x => x.f);
 }
 
+/**
+ * PROD-3 — flag-level change between two runs of the SAME company.
+ * Identity is the flag TYPE; buckets carry the objects from the side that
+ * owns the narrative: `added`/`kept` from the newer run, `resolved` from
+ * the older. Input order preserved within each bucket; inputs untouched.
+ */
+export function diffFlags(olderFlags, newerFlags) {
+  const older = Array.isArray(olderFlags) ? olderFlags : [];
+  const newer = Array.isArray(newerFlags) ? newerFlags : [];
+  const oldTypes = new Set(older.map(f => f.type));
+  const newTypes = new Set(newer.map(f => f.type));
+  return {
+    added:    newer.filter(f => !oldTypes.has(f.type)),
+    resolved: older.filter(f => !newTypes.has(f.type)),
+    kept:     newer.filter(f => oldTypes.has(f.type)),
+  };
+}
+
+const sameCo = (x, y) => {
+  const nx = (x || "").trim().toLowerCase();
+  return nx !== "" && nx === (y || "").trim().toLowerCase();
+};
+
 // ── Screen ───────────────────────────────────────────────────────────────────
 
 const DIM_MAX = 20;
 const tone = v => (v >= 14 ? "bad" : v >= 8 ? "warn" : "ok");
 
 export function CompareScreen({ rows, makeClaim, onBack }) {
-  const [state, setState] = useState({ loading: true, error: false, reports: [] });
+  const [state, setState] = useState({ loading: true, error: false, pairs: [] });
 
   useEffect(() => {
     let alive = true;
     Promise.all(
       rows.map(async r => {
         const raw = await getReport(r.job_id);
-        return normalise(raw, makeClaim(r.company_name || "Unknown"));
+        return { row: r, rep: normalise(raw, makeClaim(r.company_name || "Unknown")) };
       })
     )
-      .then(reports => {
+      .then(pairs => {
         if (!alive) return;
-        if (reports.length !== 2 || reports.some(x => !x)) {
-          setState({ loading: false, error: true, reports: [] });
-        } else {
-          setState({ loading: false, error: false, reports });
+        if (pairs.length !== 2 || pairs.some(p => !p.rep)) {
+          setState({ loading: false, error: true, pairs: [] });
+          return;
         }
+        // PROD-3: two runs of the SAME company are a before/after, not an
+        // A/B — order them in time so the earlier run always reads left.
+        const same = sameCo(
+          pairs[0].rep.company_name || pairs[0].rep.headline,
+          pairs[1].rep.company_name || pairs[1].rep.headline,
+        );
+        const ordered = same
+          ? [...pairs].sort((x, y) =>
+              (x.row.completed_at || "") < (y.row.completed_at || "") ? -1 : 1)
+          : pairs;
+        setState({ loading: false, error: false, pairs: ordered });
       })
-      .catch(() => alive && setState({ loading: false, error: true, reports: [] }));
+      .catch(() => alive && setState({ loading: false, error: true, pairs: [] }));
     return () => { alive = false; };
     // rows are fixed for this route's lifetime — a new comparison is a new route.
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [a, b] = state.reports;
+  const [pa, pb] = state.pairs;
+  const a = pa?.rep, b = pb?.rep;
+  const same = a && b && sameCo(a.company_name || a.headline,
+                                b.company_name || b.headline);
+  const delta = same ? (b.score ?? 0) - (a.score ?? 0) : 0;
 
   return (
     <div className="screen cmp-screen">
@@ -106,9 +143,28 @@ export function CompareScreen({ rows, makeClaim, onBack }) {
         </div>
       ) : (
         <>
+          {/* PROD-3: two runs of the same company are a before/after — the
+              banner names the mode and carries the honest delta (▲ worse,
+              ▼ better, ± 0 when nothing moved — never an invented change). */}
+          {same && (
+            <div className="cmp-same">
+              <span className="cmp-same-lbl mono small">SAME COMPANY · TWO RUNS</span>
+              <span className="cmp-same-delta mono"
+                data-dir={delta > 0 ? "up" : delta < 0 ? "down" : "flat"}>
+                {a.score ?? 0} → {b.score ?? 0}{" "}
+                ({delta > 0 ? `▲ +${delta}` : delta < 0 ? `▼ ${delta}` : "± 0"})
+              </span>
+            </div>
+          )}
+
           <div className="cmp-grid">
-            {[a, b].map(rep => (
-              <section className="cmp-col" key={rep.job_id || rep.headline}>
+            {state.pairs.map(({ row, rep }, i) => (
+              <section className="cmp-col" key={row.job_id}>
+                {same && (
+                  <div className="cmp-run-tag mono small mute">
+                    {i === 0 ? "earlier" : "latest"} · {(row.completed_at || "").slice(0, 10)}
+                  </div>
+                )}
                 <h2 className="cmp-co">{rep.company_name || rep.headline}</h2>
                 <RiskPill score={rep.score ?? 0} />
                 <div className="cmp-flags">
@@ -118,13 +174,14 @@ export function CompareScreen({ rows, makeClaim, onBack }) {
                       No flags on this report.
                     </p>
                   ) : (
-                    topFlags(rep.flags).map((f, i) => (
-                      <div className="cmp-flag" key={i} data-sev={f.severity || "medium"}>
+                    topFlags(rep.flags).map((f, j) => (
+                      <div className="cmp-flag" key={j} data-sev={f.severity || "medium"}>
                         <div className="cmp-flag-type small">
                           <span className="cmp-flag-dot" />
                           {f.type}
                         </div>
                         <p className="cmp-flag-desc small mute">{f.description}</p>
+                        <RegChips type={f.type} />
                       </div>
                     ))
                   )}
@@ -132,6 +189,39 @@ export function CompareScreen({ rows, makeClaim, onBack }) {
               </section>
             ))}
           </div>
+
+          {/* PROD-3: the flag-level change narrative — what a new run added
+              or resolved relative to the earlier one. Identical runs say so
+              plainly instead of inventing movement. */}
+          {same && (() => {
+            const d = diffFlags(a.flags, b.flags);
+            return (
+              <div className="cmp-diff">
+                <div className="cmp-flags-lbl mono small mute">CHANGE SINCE EARLIER RUN</div>
+                {d.added.length === 0 && d.resolved.length === 0 ? (
+                  <p className="small mute" style={{ margin: "6px 0 0" }}>
+                    No flag changes between runs.
+                  </p>
+                ) : (
+                  <>
+                    {d.added.map(f => (
+                      <div className="cmp-diff-row" data-kind="added" key={"a-" + f.type}>
+                        <span className="cmp-diff-mark mono small">▲ NEW</span>
+                        <span className="cmp-diff-type small">{f.type}</span>
+                        <RegChips type={f.type} />
+                      </div>
+                    ))}
+                    {d.resolved.map(f => (
+                      <div className="cmp-diff-row" data-kind="resolved" key={"r-" + f.type}>
+                        <span className="cmp-diff-mark mono small">▼ RESOLVED</span>
+                        <span className="cmp-diff-type small">{f.type}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Mirrored dimension bars — the two sides grow toward each other
               from the shared label spine, so a longer bar reads as "worse"

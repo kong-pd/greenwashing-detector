@@ -105,6 +105,41 @@ test("selecting two reports opens a side-by-side comparison", async ({ page }) =
   await expect(page.getByRole("heading", { name: "Analysis History" })).toBeVisible();
 });
 
+test("two runs of the SAME company become a change narrative", async ({ page }) => {
+  // PROD-3: comparing a company with itself is the accumulation loop's
+  // payoff — the view stops being A-vs-B and starts answering "what
+  // changed?". Two fresh Shell runs through the mock pipeline land on
+  // identical scores/flags, which pins the honest zero-state too:
+  // "± 0" and "no flag changes", never an invented delta.
+  await seed(page, "Shell");
+  await seed(page, "Shell");
+
+  await page.goto("/");
+  await page.getByRole("navigation").getByRole("button", { name: "Reports" }).click();
+
+  const shellRows = page.locator(".rpts-row", { hasText: "Shell" });
+  await expect(shellRows.nth(1)).toBeVisible();
+  await shellRows.nth(0).getByRole("button", { name: "Select" }).click();
+  await shellRows.nth(1).getByRole("button", { name: "Select" }).click();
+  await page.locator(".rpts-compare-bar").getByRole("button", { name: "Compare →" }).click();
+
+  // Same-company mode announces itself and orders the runs in time:
+  // the EARLIER run reads left, the LATEST right — a before/after, not A/B.
+  await expect(page.locator(".cmp-same")).toContainText("SAME COMPANY");
+  const cols = page.locator(".cmp-col");
+  await expect(cols.nth(0)).toContainText("earlier");
+  await expect(cols.nth(1)).toContainText("latest");
+
+  // Identical runs → the delta is honestly zero…
+  await expect(page.locator(".cmp-same")).toContainText("72 → 72");
+  await expect(page.locator(".cmp-same")).toContainText("± 0");
+  // …and the flag diff says so instead of inventing movement.
+  await expect(page.getByText("No flag changes between runs")).toBeVisible();
+
+  // PROD-2 reaches this screen too: the compared flags carry their chips.
+  await expect(page.getByText("FTC §260.2").first()).toBeVisible();
+});
+
 test("deselecting collapses the bar; a third pick swaps out the oldest", async ({ page }) => {
   // Relay state persists across this file (workers=1): the two seeds above
   // are still listed. A third company completes the swap scenario.

@@ -11,6 +11,7 @@ import {
 } from "../components/SharedComponents.jsx";
 import { gwdToast } from "../toast.js";
 import { toHref } from "../utils.js";
+import { INDICATIVE_NOTE } from "../regmap.js";
 
 // ── Flag → evidence traceability (auditability) ──────────────────────────────
 // Resolve which evidence item a flag's `source` string refers to, so clicking
@@ -337,6 +338,7 @@ export function ReportScreen({ claim, query, origin = "search", scoreVariant = "
               );
             })}
           </div>
+          <p className="rep-flags-note mono small mute">{INDICATIVE_NOTE}</p>
         </ReportSection>
 
         {/* §4 Evidence trail */}
