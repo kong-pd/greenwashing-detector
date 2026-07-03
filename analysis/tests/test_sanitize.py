@@ -11,12 +11,21 @@ not Live-view news). Ordinary multilingual text must pass through intact.
 import asyncio
 import json
 import os
+import sys
 
 import pytest
+
+# Standalone-import safety: single-file invocation (pytest analysis/tests/
+# test_sanitize.py from repo root) must not depend on an ALPHABETICALLY
+# EARLIER test file having inserted the path first — that free ride is how
+# this file collected fine in CI's full-dir run yet failed to import alone.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import main as analysis_main
 from main import _RELAY, _RELAY_ORDER, process, RunRequest
 from sanitize import sanitize_text, sanitize_evidence, MAX_CONTENT_CHARS
+from tracing import Trace
+import tracing as tracing_mod
 
 
 # ── pure function ─────────────────────────────────────────────────────────────
@@ -85,12 +94,15 @@ def clean_relay():
     _RELAY_ORDER.clear(); _RELAY_ORDER.extend(saved_order)
 
 
-def test_pipeline_sanitises_content_and_leaves_a_trace_event():
-    # CI incident (2026-07-03): the first version POSTed /run and asserted
-    # immediately — but /run is asyncio.create_task fire-and-forget, so the
-    # assertion raced the pipeline. Local 3.12 happened to win the race,
-    # CI's 3.11 did not. The canonical pattern (test_pipeline_integration)
-    # awaits process() directly: deterministic, no scheduler assumptions.
+def test_pipeline_sanitises_content_and_leaves_a_trace_event(tmp_path, monkeypatch):
+    # Two CI incidents live in this test's history (2026-07-03):
+    #   1. POST /run + immediate assert raced the fire-and-forget task
+    #      (local 3.12 won the race, CI's 3.11 didn't) → await process()
+    #      directly, the canonical test_pipeline_integration pattern.
+    #   2. Reading the dump from a repo-relative path broke when CI launched
+    #      pytest from the repo root (CWD-relative artifact) → the test now
+    #      OWNS the dump location via TRACE_DIR, hermetic from any CWD.
+    monkeypatch.setenv("TRACE_DIR", str(tmp_path))
     job_id = "san-itest-1"
     dirty = (
         "Aster sustainability plan: net-zero emissions by 2040.\u200b\u200b\n"
@@ -102,10 +114,25 @@ def test_pipeline_sanitises_content_and_leaves_a_trace_event():
     )))
     assert _RELAY[job_id]["status"] == "completed", "sanitising must not break the run"
 
-    trace_path = os.path.join(os.path.dirname(analysis_main.__file__),
-                              "traces", f"{job_id}.jsonl")
-    events = [json.loads(l) for l in open(trace_path, encoding="utf-8")]
+    events = [json.loads(l)
+              for l in open(tmp_path / f"{job_id}.jsonl", encoding="utf-8")]
     san = [e for e in events if e["name"] == "content_sanitised"]
     assert len(san) == 1
     assert san[0]["level"] == "debug", "machinery, not Live-view news"
     assert san[0]["data"]["removed"] >= 2
+
+
+def test_trace_dump_default_dir_is_module_anchored(tmp_path, monkeypatch):
+    """The flywheel's feedstock must not drift with the launch directory:
+    with no TRACE_DIR and a hostile CWD (CI runs pytest from the repo
+    root), the default dump still lands next to tracing.py."""
+    monkeypatch.delenv("TRACE_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)  # simulate an arbitrary launch dir
+    t = Trace("anchor-contract")
+    t.emit("test", "success", "ping")
+    path = t.dump_jsonl()
+    assert path is not None
+    expected_dir = os.path.join(
+        os.path.dirname(os.path.abspath(tracing_mod.__file__)), "traces")
+    assert os.path.dirname(os.path.abspath(path)) == expected_dir
+    os.remove(path)  # leave no test droppings in the real traces dir

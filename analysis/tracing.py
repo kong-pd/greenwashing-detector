@@ -102,7 +102,14 @@ class Trace:
     def dump_jsonl(self, dir_: str | None = None) -> str | None:
         """Best-effort full-trace persistence — the quality loop's feedstock.
         Ephemeral on free-tier hosts; that is acceptable for now."""
-        dir_ = dir_ or os.environ.get("TRACE_DIR", "traces")
+        # CI lesson (2026-07-03): the old default was the CWD-relative
+        # "traces", so the dump landed wherever the process was LAUNCHED
+        # from — repo root under CI's `pytest analysis/tests/`, analysis/
+        # under local runs, who-knows-where under a future deploy script.
+        # The flywheel's feedstock must not drift with the launch dir:
+        # anchor to this module. TRACE_DIR still overrides for tests/ops.
+        dir_ = dir_ or os.environ.get("TRACE_DIR") or os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "traces")
         try:
             os.makedirs(dir_, exist_ok=True)
             path = os.path.join(dir_, f"{self.trace_id}.jsonl")

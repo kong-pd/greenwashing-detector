@@ -6,3 +6,5 @@ dist/
 .DS_Store
 *.pdf
 venv/
+traces/
+analysis/traces/
