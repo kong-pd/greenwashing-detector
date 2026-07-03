@@ -352,6 +352,29 @@ h1, h2, h3, h4, h5 { margin: 0; font-weight: 500; }
 .rpts-band { margin-top: 2px; }
 .rpts-actions { display: flex; gap: 6px; }
 
+/* PROD-1 L3: watchlist block — same family as the compare bar. Delta
+   direction follows RISK semantics: ▲ up = worse (bad), ▼ down = better. */
+.rpts-watch {
+  border: .5px solid var(--c-line-2);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+.rpts-watch-lbl { letter-spacing: .08em; margin-bottom: 2px; }
+.rpts-watch-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 9px 0;
+  border-top: .5px solid var(--c-line);
+}
+.rpts-watch-row:first-of-type { border-top: 0; }
+.rpts-watch-co { font-weight: 500; font-size: 13px; color: var(--c-ink-0); }
+.rpts-watch-delta[data-dir="up"]   { color: var(--c-bad); }
+.rpts-watch-delta[data-dir="down"] { color: var(--c-ok); }
+.rpts-watch-delta[data-dir="flat"] { color: var(--c-ink-2); }
+.rpts-watch-actions { margin-left: auto; display: flex; gap: 6px; }
+
 /* PROD-1 L2: comparison pick + bar + screen */
 .rep-action.on {
   border-color: var(--c-accent);

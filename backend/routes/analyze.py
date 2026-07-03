@@ -203,8 +203,12 @@ async def analyze(req: AnalyzeRequest):
     if not company:
         return {"error": "Company name cannot be empty"}
 
-    # Check cache (Supabase → local_cache.json fallback)
-    cached = get_cached_company(company)
+    # Check cache (Supabase → local_cache.json fallback).
+    # manual_content BYPASSES it: the user asked to analyse THEIR text, and
+    # a cached report of the company cannot answer that. Without this guard,
+    # pasting a claim for a cached name silently discarded the user's input
+    # (C-4 family — found by E2E 14 re-analysing Shell).
+    cached = None if req.manual_content else get_cached_company(company)
     if cached:
         job_id = cached["job_id"]
 

@@ -39,7 +39,7 @@ export function findEvidenceForFlag(flag, evidence) {
   return bestScore >= 2 ? best : null;
 }
 
-export function ReportScreen({ claim, query, origin = "search", scoreVariant = "arc", onBack, onOpenEvidence }) {
+export function ReportScreen({ claim, query, origin = "search", scoreVariant = "arc", onBack, onOpenEvidence, watched = false, onToggleWatch }) {
   const [showMeth, setShowMeth] = useState(false);
   const band = riskBand(claim.score);
 
@@ -109,6 +109,15 @@ export function ReportScreen({ claim, query, origin = "search", scoreVariant = "
 
           <div className="rep-topbar-r">
             <span className="mono small mute">Issued {claim.analyzedAt}</span>
+            {/* PROD-1 L3: the "I care about this company" moment — the
+                snapshot taken here is the baseline for change-since-last-
+                analysis on the Reports page. */}
+            {onToggleWatch && (
+              <button className={"rep-action small" + (watched ? " on" : "")}
+                aria-pressed={watched} onClick={onToggleWatch}>
+                {watched ? "★ Watching" : "☆ Watch"}
+              </button>
+            )}
             <button className="rep-action small" onClick={handleExportPDF}>Export PDF ↓</button>
             <button
               className="rep-action small"

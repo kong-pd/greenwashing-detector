@@ -21,6 +21,11 @@ import { DIMENSION_META, RiskPill } from "../components/SharedComponents.jsx";
  */
 export function toggleSelection(sel, row) {
   const current = Array.isArray(sel) ? sel : [];
+  // No identity → not selectable. Without this, undefined === undefined
+  // makes two DIFFERENT id-less rows toggle each other off, which the UI
+  // reads as "single-select only". Merge/relay rows always carry job_id;
+  // this guards injected or legacy payloads.
+  if (!row?.job_id) return current;
   if (current.some(r => r.job_id === row.job_id)) {
     return current.filter(r => r.job_id !== row.job_id);
   }

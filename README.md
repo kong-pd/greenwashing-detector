@@ -56,7 +56,7 @@ Browser
 
 The scoring pipeline is domain-agnostic — ESG rubric and evidence weight bands are config. Evidence weighting: `weight = clamp_band(0.45 × reliability + 0.20 × recency + 0.35 × relevance)`. Reliability and recency are computed deterministically; AI only assigns relevance, bounded to a per-source-kind band.
 
-Beyond the single analysis run, the product keeps an accumulation loop: the landing page surfaces recent analyses (merged from DB and relay, honestly tagged when session-only), any two completed reports can be compared side by side — scores, the five dimensions as mirrored paired bars, each side's top findings — and uploading a report pauses at a confirm step (editable company name + extraction preview) so a filename never silently becomes an identity.
+Beyond the single analysis run, the product keeps an accumulation loop: the landing page surfaces recent analyses (merged from DB and relay, honestly tagged when session-only), any two completed reports can be compared side by side — scores, the five dimensions as mirrored paired bars, each side's top findings — and uploading a report pauses at a confirm step (editable company name + extraction preview) so a filename never silently becomes an identity. A local-first watchlist (localStorage, labelled "local to this browser") stars a company from its report and shows the change since that baseline when a newer analysis lands — with one-click re-analyse. Supplying manual content always bypasses the company cache: the user asked to analyse their text, and a cached report cannot answer that.
 
 AI fallback chain:
 1. Gemini 2.5 Flash-Lite — 1,000/day free
@@ -146,7 +146,7 @@ cd frontend && npm test           # vitest: API contracts, error copy
 pytest analysis/evals/ -v
 python -m evals.compare --label v3.2 [--against <old-label>]   # offline prompt regression
 
-# Browser E2E (18 journeys, ~2min)
+# Browser E2E (20 journeys, ~2.5min)
 cd e2e && npm ci && npx playwright install chromium
 npx playwright test
 ```
@@ -221,7 +221,7 @@ analysis/
 
 e2e/
   playwright.config.js  boots all three services with a hermetic offline env
-  tests/                18 browser journeys (cache hit, failure→recovery, live events, compare, …)
+  tests/                20 browser journeys (cache hit, failure→recovery, live events, compare, db-online topology, watchlist, …)
 
 database/
   schema.sql            fresh setup
