@@ -1,0 +1,8 @@
+{
+  "id": "edge_short",
+  "category": "edge",
+  "company": "Shortco",
+  "content": "We value your privacy.",
+  "expected": { "relevant": false, "score_band": null, "must_flag_types": null },
+  "note": "below min_chars — fail-closed"
+}

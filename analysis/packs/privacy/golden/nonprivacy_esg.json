@@ -1,0 +1,8 @@
+{
+  "id": "nonprivacy_esg",
+  "category": "off_domain",
+  "company": "Aster Renewables",
+  "content": "We commit to net-zero emissions by 2040, publish verified carbon reduction data, and source renewable energy across our operations under our sustainability programme.",
+  "expected": { "relevant": false, "score_band": null, "must_flag_types": null },
+  "note": "the cross-domain case: ESG text must be REFUSED by the privacy pack"
+}

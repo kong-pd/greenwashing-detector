@@ -1,0 +1,8 @@
+{
+  "id": "privacy_clean_policy",
+  "category": "clean",
+  "company": "Plainbook",
+  "content": "Privacy notice: we collect only your email address for login. No third-party sharing. Personal data is deleted 30 days after account closure. You may exercise GDPR rights including erasure at any time via the in-app privacy console, with consent recorded separately.",
+  "expected": { "relevant": true, "score_band": [0, 40], "must_flag_types": null },
+  "note": "toy pack — narrow scope, concrete retention, real deletion path"
+}

@@ -22,15 +22,23 @@ MIN_CHARS = _REL["min_chars"]
 MIN_SIGNALS = _REL["min_signals"]
 
 
-def check_relevance(content: str | None) -> dict:
+def check_relevance(content: str | None, cfg: dict | None = None) -> dict:
     """Returns {relevant, signals, matched}. Fails closed: empty or short
-    content is never relevant."""
+    content is never relevant.
+
+    `cfg` (ARCH-1 Phase B): an explicit pack `relevance` dict — lets tests
+    and future multi-pack callers gate under a DIFFERENT domain's lexicon
+    without env reloads. Default remains the active pack's module binding,
+    so the production path is unchanged."""
+    stems = tuple(cfg["stems"]) if cfg else STEMS
+    min_chars = cfg["min_chars"] if cfg else MIN_CHARS
+    min_signals = cfg["min_signals"] if cfg else MIN_SIGNALS
     text = (content or "").lower()
-    if len(text.strip()) < MIN_CHARS:
+    if len(text.strip()) < min_chars:
         return {"relevant": False, "signals": 0, "matched": []}
-    matched = sorted({s for s in STEMS if s in text})
+    matched = sorted({s for s in stems if s in text})
     return {
-        "relevant": len(matched) >= MIN_SIGNALS,
+        "relevant": len(matched) >= min_signals,
         "signals": len(matched),
         "matched": matched[:8],
     }

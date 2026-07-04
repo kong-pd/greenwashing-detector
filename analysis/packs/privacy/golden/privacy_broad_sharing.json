@@ -1,0 +1,8 @@
+{
+  "id": "privacy_broad_sharing",
+  "category": "clear_risk",
+  "company": "AdHarbor",
+  "content": "Our privacy policy: we collect personal data and device identifiers via cookies and tracking pixels, and share personal information with third-party advertising partners and data brokers. Retention continues as long as necessary. Contact the DPO for GDPR requests.",
+  "expected": { "relevant": true, "score_band": [55, 95], "must_flag_types": ["Broad Data Sharing"] },
+  "note": "toy pack — broad sharing + vague retention"
+}
