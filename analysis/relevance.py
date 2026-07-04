@@ -11,16 +11,15 @@ cover EN + DE; ES/FR are a known gap noted in the README.
 """
 from __future__ import annotations
 
-STEMS: tuple[str, ...] = (
-    "sustainab", "emission", "carbon", "net-zero", "net zero", "climat",
-    "klima", "nachhaltig", "esg", "scope 1", "scope 2", "scope 3",
-    "renewab", "recycl", "greenhouse", "ghg", "decarbon", "sbti", "tcfd",
-    "gri ", "biodivers", "offset", "solar", "circular econom",
-    "environmental", "supply chain audit",
-)
+from pack import load_pack
 
-MIN_CHARS = 40
-MIN_SIGNALS = 3
+# ARCH-1 Phase A: the lexicon is domain knowledge and travels with the
+# pack; the gate LOGIC (stem matching, fail-closed thresholds) is engine.
+_REL = load_pack()["relevance"]
+
+STEMS: tuple[str, ...] = tuple(_REL["stems"])
+MIN_CHARS = _REL["min_chars"]
+MIN_SIGNALS = _REL["min_signals"]
 
 
 def check_relevance(content: str | None) -> dict:

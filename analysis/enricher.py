@@ -1,4 +1,9 @@
 import httpx
+
+from pack import load_pack, fill
+
+_PACK = load_pack()
+_SEARCH = _PACK["search"]
 import os
 import re
 from datetime import datetime, timedelta
@@ -68,7 +73,7 @@ async def fetch_news_serper(company_name: str) -> list[dict]:
                     "Content-Type": "application/json",
                 },
                 json={
-                    "q":   f"{company_name} greenwashing OR sustainability OR ESG",
+                    "q":   fill(_SEARCH["enrich_query_primary"], company_name),
                     "num": 10,
                     "hl":  "en",
                 },
@@ -118,7 +123,7 @@ async def fetch_news_guardian(company_name: str, max_items: int = 3) -> list[dic
             res = await client.get(
                 "https://content.guardianapis.com/search",
                 params={
-                    "q":           f"{company_name} greenwashing sustainability ESG",
+                    "q":           fill(_SEARCH["enrich_query_fallback"], company_name),
                     "api-key":     api_key,
                     "show-fields": "trailText,bodyText",
                     "page-size":   max_items + 3,  # 多取几条备用过滤
@@ -166,11 +171,8 @@ async def fetch_news_guardian(company_name: str, max_items: int = 3) -> list[dic
 # ─── CDP data（stub）─────────────────────────────────────────────────────────
 
 def fetch_cdp(company_name: str) -> str:
-    return (
-        f"CDP verified emissions data for {company_name} is not available in this analysis. "
-        f"Score the Data Consistency dimension based only on the news evidence and scraped "
-        f"content provided above. Do not penalise or adjust the score due to CDP data absence alone."
-    )
+    # Domain copy travels with the pack (ARCH-1 Phase A).
+    return fill(_PACK["evidence_stub_note"], company_name)
 
 
 # ─── Main entry point ─────────────────────────────────────────────────────────

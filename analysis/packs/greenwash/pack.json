@@ -1,0 +1,77 @@
+{
+  "id": "greenwash",
+  "name": "Greenwashing / ESG claim screening",
+  "pack_version": "1",
+  "rubric_version": "3.3",
+  "prompt": "prompts/system_v3.3.md",
+  "mock_result": "packs/greenwash/mock_result.json",
+  "golden_dir": "evals/golden",
+
+  "dimensions": [
+    { "key": "specificity",               "label": "Claim Specificity" },
+    { "key": "data_consistency",          "label": "Data Consistency" },
+    { "key": "third_party_certification", "label": "Third-Party Verification" },
+    { "key": "negative_news",             "label": "Negative News" },
+    { "key": "greenwashing_language",     "label": "Greenwashing Language" }
+  ],
+  "dimension_max": 20,
+
+  "flag_types": [
+    "Vague Claims",
+    "Data Contradiction",
+    "Lack of Certification",
+    "Negative News",
+    "Greenwashing Language"
+  ],
+
+  "risk_bands": [
+    { "max": 30,  "label": "Low Risk" },
+    { "max": 60,  "label": "Medium Risk" },
+    { "max": 100, "label": "High Risk" }
+  ],
+
+  "weights": {
+    "components": { "reliability": 0.45, "recency": 0.20, "relevance": 0.35 },
+    "bands": {
+      "Filing":     [0.85, 0.95],
+      "Database":   [0.80, 0.92],
+      "News":       [0.40, 0.80],
+      "Document":   [0.45, 0.65],
+      "Linguistic": [0.30, 0.55]
+    },
+    "kind_reliability": {
+      "Filing":     0.90,
+      "Database":   0.86,
+      "News":       0.60,
+      "Document":   0.55,
+      "Linguistic": 0.45
+    },
+    "tier1_floor": 0.85,
+    "tier1_outlets": [
+      "reuters", "financial times", "ft", "bloomberg", "the guardian",
+      "guardian", "bbc", "associated press", "ap", "wall street journal",
+      "wsj", "the new york times", "new york times", "nyt"
+    ]
+  },
+
+  "relevance": {
+    "stems": [
+      "sustainab", "emission", "carbon", "net-zero", "net zero", "climat",
+      "klima", "nachhaltig", "esg", "scope 1", "scope 2", "scope 3",
+      "renewab", "recycl", "greenhouse", "ghg", "decarbon", "sbti", "tcfd",
+      "gri ", "biodivers", "offset", "solar", "circular econom",
+      "environmental", "supply chain audit"
+    ],
+    "min_chars": 40,
+    "min_signals": 3
+  },
+
+  "search": {
+    "esg_keywords": ["sustainability", "esg", "environment", "carbon", "climate", "green"],
+    "scrape_query": "{company} sustainability ESG report site",
+    "enrich_query_primary": "{company} greenwashing OR sustainability OR ESG",
+    "enrich_query_fallback": "{company} greenwashing sustainability ESG"
+  },
+
+  "evidence_stub_note": "CDP verified emissions data for {company} is not available in this analysis. Score the Data Consistency dimension based only on the news evidence and scraped content provided above. Do not penalise or adjust the score due to CDP data absence alone."
+}
