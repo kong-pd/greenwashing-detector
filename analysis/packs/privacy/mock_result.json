@@ -1,0 +1,42 @@
+{
+  "score": 58,
+  "risk_level": "Medium Risk",
+  "riskLevel": "Medium Risk",
+  "confidence": 0.62,
+  "dimension_scores": {
+    "data_collection_scope": 14,
+    "third_party_sharing": 16,
+    "retention_clarity": 12,
+    "user_rights": 9,
+    "consent_language": 7
+  },
+  "dimensionScores": {
+    "data_collection_scope": 14,
+    "third_party_sharing": 16,
+    "retention_clarity": 12,
+    "user_rights": 9,
+    "consent_language": 7
+  },
+  "flags": [
+    {
+      "type": "Broad Data Sharing",
+      "severity": "high",
+      "description": "[MOCK] Policy permits sharing with undefined 'trusted partners' including advertising networks.",
+      "source": "policy"
+    },
+    {
+      "type": "Vague Retention",
+      "severity": "medium",
+      "description": "[MOCK] Data is retained 'as long as necessary' with no criteria or upper bound stated.",
+      "source": "policy"
+    },
+    {
+      "type": "Buried Consent",
+      "severity": "medium",
+      "description": "[MOCK] Consent to profiling is bundled into the general terms acceptance.",
+      "source": "policy"
+    }
+  ],
+  "evidence": [],
+  "summary": "[MOCK MODE] Toy privacy-pack fixture. The policy grants itself broad collection and sharing latitude, keeps retention open-ended, and bundles consent; deletion rights exist but the path is indirect."
+}

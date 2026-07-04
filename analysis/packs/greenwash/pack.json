@@ -67,7 +67,7 @@
   },
 
   "search": {
-    "esg_keywords": ["sustainability", "esg", "environment", "carbon", "climate", "green"],
+    "triage_keywords": ["sustainability", "esg", "environment", "carbon", "climate", "green"],
     "scrape_query": "{company} sustainability ESG report site",
     "enrich_query_primary": "{company} greenwashing OR sustainability OR ESG",
     "enrich_query_fallback": "{company} greenwashing sustainability ESG"

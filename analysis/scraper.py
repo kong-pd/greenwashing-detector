@@ -6,7 +6,7 @@ from pack import load_pack, fill
 
 _SEARCH = load_pack()["search"]
 # Domain keywords for URL/result triage travel with the pack (ARCH-1).
-ESG_KEYWORDS = list(_SEARCH["esg_keywords"])
+ESG_KEYWORDS = list(_SEARCH["triage_keywords"])
 
 # Snippet fallback threshold: combined organic snippets must reach this length
 # to be considered a usable degraded content source. Below it, we keep the

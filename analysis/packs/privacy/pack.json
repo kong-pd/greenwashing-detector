@@ -1,0 +1,70 @@
+{
+  "id": "privacy",
+  "name": "Privacy-policy risk screening (toy demonstration pack)",
+  "pack_version": "1",
+  "rubric_version": "0.1-toy",
+  "prompt": "packs/privacy/prompt_v0.1.md",
+  "mock_result": "packs/privacy/mock_result.json",
+  "golden_dir": "packs/privacy/golden",
+
+  "dimensions": [
+    { "key": "data_collection_scope", "label": "Collection Scope" },
+    { "key": "third_party_sharing",   "label": "Third-Party Sharing" },
+    { "key": "retention_clarity",     "label": "Retention Clarity" },
+    { "key": "user_rights",           "label": "User Rights & Deletion" },
+    { "key": "consent_language",      "label": "Consent Language" }
+  ],
+  "dimension_max": 20,
+
+  "flag_types": [
+    "Broad Data Sharing",
+    "Vague Retention",
+    "Buried Consent",
+    "No Deletion Path",
+    "Dark Pattern Language"
+  ],
+
+  "risk_bands": [
+    { "max": 30,  "label": "Low Risk" },
+    { "max": 60,  "label": "Medium Risk" },
+    { "max": 100, "label": "High Risk" }
+  ],
+
+  "weights": {
+    "components": { "reliability": 0.45, "recency": 0.20, "relevance": 0.35 },
+    "bands": {
+      "Filing":     [0.85, 0.95],
+      "Database":   [0.80, 0.92],
+      "News":       [0.40, 0.80],
+      "Document":   [0.45, 0.65],
+      "Linguistic": [0.30, 0.55]
+    },
+    "kind_reliability": {
+      "Filing": 0.90, "Database": 0.86, "News": 0.60,
+      "Document": 0.55, "Linguistic": 0.45
+    },
+    "tier1_floor": 0.85,
+    "tier1_outlets": ["reuters", "bloomberg", "the guardian", "bbc", "wired", "techcrunch"]
+  },
+
+  "relevance": {
+    "stems": [
+      "privacy", "personal data", "personal information", "gdpr", "ccpa",
+      "cookie", "consent", "data controller", "data processor",
+      "third-party", "third party", "retention", "opt-out", "opt out",
+      "data subject", "erasure", "right to delete", "tracking",
+      "profiling", "lawful basis", "dpo", "pii", "device identifier"
+    ],
+    "min_chars": 40,
+    "min_signals": 3
+  },
+
+  "search": {
+    "triage_keywords": ["privacy", "cookie", "data", "gdpr", "consent", "policy"],
+    "scrape_query": "{company} privacy policy",
+    "enrich_query_primary": "{company} privacy policy data sharing GDPR",
+    "enrich_query_fallback": "{company} privacy data breach"
+  },
+
+  "evidence_stub_note": "Regulator enforcement records for {company} are not available in this analysis. Score the Third-Party Sharing dimension based only on the policy text and news evidence provided above. Do not penalise the score for the absence of enforcement data alone."
+}
