@@ -159,7 +159,7 @@ The E2E suite boots the real three-service topology (Chromium → Vite → web-s
 
 Every pipeline run writes an append-only **trace** (`{seq, span, type, level, name, data}`), emitted through a tiny stage contract (`analysis/tracing.py`). One log, three consumers: the loading screen renders the `level=user` projection live through the existing poll (every line on screen actually happened — including which fallback layer answered); the full JSONL lands in `analysis/traces/` as feedstock for the quality loop; fallback-layer hit rates and stage latencies fall out for free.
 
-The quality loop: a **relevance gate** (`relevance.py`) refuses non-ESG content with `content_not_relevant` before any model spends a token — born from a real failure where a homework PDF received a confident greenwashing verdict. A **golden set** (`analysis/evals/golden/`, 23 cases: cached companies, clear greenwash/clean, non-ESG, edge, prompt-injection, multilingual) is executed as pytest, layered by what the environment can honestly verify: gate expectations always, result-shape property assertions on every run, score bands only with real keys. `evals/compare.py` diffs two snapshots for offline prompt regressions; `evals/flag.py` files bad traces into the failure corpus, whose house rule is that every diagnosed failure becomes a golden case. Prompts live in `analysis/prompts/` with the version recorded in every trace, result, and report masthead. Known gap, pinned by the golden set itself: ES/FR relevance stems.
+The quality loop: a **relevance gate** (`relevance.py`) refuses non-ESG content with `content_not_relevant` before any model spends a token — born from a real failure where a homework PDF received a confident greenwashing verdict. A **golden set** (`analysis/evals/golden/`, 23 cases: cached companies, clear greenwash/clean, non-ESG, edge, prompt-injection, multilingual) is executed as pytest, layered by what the environment can honestly verify: gate expectations always, result-shape property assertions on every run, score bands only with real keys. `evals/compare.py` diffs two snapshots for offline prompt regressions; `evals/flag.py` files bad traces into the failure corpus, whose house rule is that every diagnosed failure becomes a golden case. Prompts live in `analysis/prompts/` with the version recorded in every trace, result, and report masthead. The domain itself is a data artifact: `analysis/packs/greenwash/pack.json` carries the dimensions, flag vocabulary, risk bands, weight calibration, relevance lexicon and search phrasing, plus references to the rubric prompt, mock fixture and golden corpus — the engine loads it at boot (fail-loud, `DOMAIN_PACK` selectable), and the frontend's copies are pinned to the manifest by a parity test. Greenwashing is pack #1. Known gap, pinned by the golden set itself: ES/FR relevance stems.
 
 ---
 
@@ -202,6 +202,8 @@ backend/
   pdf/generator.py      WeasyPrint export
 
 analysis/
+  pack.py               domain-pack loader (fail-loud, module-anchored)
+  packs/greenwash/      the domain as data: dimensions, lexicon, weights, rubric refs
   scraper.py            ESG page discovery + Playwright fetch
   enricher.py           news evidence assembly
   analyzer.py           AI chain + weight normalization

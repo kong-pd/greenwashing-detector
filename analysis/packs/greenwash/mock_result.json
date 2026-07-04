@@ -1,0 +1,42 @@
+{
+  "score": 72,
+  "risk_level": "High Risk",
+  "riskLevel": "High Risk",
+  "confidence": 0.85,
+  "dimension_scores": {
+    "specificity": 15,
+    "data_consistency": 18,
+    "third_party_certification": 10,
+    "negative_news": 19,
+    "greenwashing_language": 10
+  },
+  "dimensionScores": {
+    "specificity": 15,
+    "data_consistency": 18,
+    "third_party_certification": 10,
+    "negative_news": 19,
+    "greenwashing_language": 10
+  },
+  "flags": [
+    {
+      "type": "Data Contradiction",
+      "severity": "high",
+      "description": "[MOCK] Company claims a 15% reduction in carbon emissions, but external data shows a 3% increase over the same period.",
+      "source": "Mock Data"
+    },
+    {
+      "type": "Negative News",
+      "severity": "high",
+      "description": "[MOCK] The company is under investigation by regulators for misleading carbon-neutral advertising.",
+      "source": "Mock News"
+    },
+    {
+      "type": "Vague Claims",
+      "severity": "medium",
+      "description": "[MOCK] Sustainability report relies heavily on phrases like 'committed to net-zero' with no defined timeline.",
+      "source": "Mock Website"
+    }
+  ],
+  "evidence": [],
+  "summary": "[MOCK MODE] This is a pre-set example report used as an emergency fallback when AI APIs are unavailable."
+}

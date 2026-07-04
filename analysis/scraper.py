@@ -2,7 +2,11 @@ import httpx
 import os
 from playwright.async_api import async_playwright
 
-ESG_KEYWORDS = ["sustainability", "esg", "environment", "carbon", "climate", "green"]
+from pack import load_pack, fill
+
+_SEARCH = load_pack()["search"]
+# Domain keywords for URL/result triage travel with the pack (ARCH-1).
+ESG_KEYWORDS = list(_SEARCH["esg_keywords"])
 
 # Snippet fallback threshold: combined organic snippets must reach this length
 # to be considered a usable degraded content source. Below it, we keep the
@@ -37,7 +41,7 @@ async def _search_esg(company_name: str) -> tuple[str | None, list[dict]]:
                     "Content-Type": "application/json",
                 },
                 json={
-                    "q": f"{company_name} sustainability ESG report site",
+                    "q": fill(_SEARCH["scrape_query"], company_name),
                     "num": 10,
                 },
                 timeout=10,

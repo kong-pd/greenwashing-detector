@@ -6,6 +6,13 @@ import os
 from pathlib import Path
 
 from sanitize import neutralise_sentinels
+from pack import load_pack, pack_path, load_mock_result
+
+# ARCH-1 Phase A: the domain lives in a versioned pack manifest; the
+# module-level names below are kept as compat aliases so existing tests
+# and imports read the same constants — now bound to the pack instead of
+# hardcoded. Loading at import time = fail loud at boot, by design.
+_PACK = load_pack()
 
 # ─── Local cache ──────────────────────────────────────────────────────────────
 
@@ -45,36 +52,23 @@ def _lookup_local_cache(company_name: str) -> dict | None:
 # The AI judges relevance; engineering guarantees the floor and the band.
 
 WEIGHT_BANDS: dict[str, tuple[float, float]] = {
-    "Filing":     (0.85, 0.95),
-    "Database":   (0.80, 0.92),
-    "News":       (0.40, 0.80),
-    "Document":   (0.45, 0.65),
-    "Linguistic": (0.30, 0.55),
+    kind: (lo, hi) for kind, (lo, hi) in _PACK["weights"]["bands"].items()
 }
 
-KIND_RELIABILITY_BASE: dict[str, float] = {
-    "Filing":     0.90,
-    "Database":   0.86,
-    "News":       0.60,
-    "Document":   0.55,
-    "Linguistic": 0.45,
-}
+KIND_RELIABILITY_BASE: dict[str, float] = dict(_PACK["weights"]["kind_reliability"])
 
-# Tier-1 outlets get a reliability floor of 0.85 — mainstream wire/major press.
+# Tier-1 outlets get a reliability floor — mainstream wire/major press.
 # Matched on the evidence `org` field, case-insensitive exact name.
-TIER1_OUTLETS = {
-    "reuters", "financial times", "ft", "bloomberg", "the guardian",
-    "guardian", "bbc", "associated press", "ap", "wall street journal",
-    "wsj", "the new york times", "new york times", "nyt",
-}
+TIER1_OUTLETS = set(_PACK["weights"]["tier1_outlets"])
+TIER1_FLOOR = _PACK["weights"]["tier1_floor"]
 
-COMPONENT_WEIGHTS = {"reliability": 0.45, "recency": 0.20, "relevance": 0.35}
+COMPONENT_WEIGHTS = dict(_PACK["weights"]["components"])
 
 
 def _reliability(kind: str, org: str | None) -> float:
     base = KIND_RELIABILITY_BASE.get(kind, 0.60)
     if kind == "News" and (org or "").strip().lower() in TIER1_OUTLETS:
-        base = max(base, 0.85)
+        base = max(base, TIER1_FLOOR)
     return round(base, 2)
 
 
@@ -170,60 +164,19 @@ def _format_evidence_for_prompt(evidence_list: list[dict]) -> str:
 # ─── System prompt ────────────────────────────────────────────────────────────
 
 # W2: prompts are files — Git is the version system, the version string
-# travels in every trace and result. Bumping the rubric = new file + const.
-# v3.3 (SEC-2): adds the CONTENT TRUST BOUNDARY section — untrusted regions
-# of the user prompt are sentinel-delimited and declared data-not-instructions.
-RUBRIC_VERSION = "3.3"
-_PROMPT_DIR = Path(__file__).parent / "prompts"
-
-def _load_prompt(name: str, version: str = RUBRIC_VERSION) -> str:
-    return (_PROMPT_DIR / f"{name}_v{version}.md").read_text()
-
-SYSTEM_PROMPT = _load_prompt("system")
+# travels in every trace and result. Bumping the rubric = edit the pack
+# manifest (rubric_version + prompt path). v3.3 (SEC-2) adds the CONTENT
+# TRUST BOUNDARY section.
+RUBRIC_VERSION = _PACK["rubric_version"]
+# The rubric prompt is declared by the pack manifest (ARCH-1 Phase A) —
+# no filename templating: bumping the rubric edits two manifest fields,
+# and test_pack pins their consistency.
+SYSTEM_PROMPT = open(pack_path(_PACK["prompt"]), encoding="utf-8").read()
 
 
-MOCK_RESULT = {
-    "score": 72,
-    "risk_level": "High Risk",
-    "riskLevel":  "High Risk",
-    "confidence": 0.85,
-    "dimension_scores": {
-        "specificity":               15,
-        "data_consistency":          18,
-        "third_party_certification": 10,
-        "negative_news":             19,
-        "greenwashing_language":     10,
-    },
-    "dimensionScores": {
-        "specificity":               15,
-        "data_consistency":          18,
-        "third_party_certification": 10,
-        "negative_news":             19,
-        "greenwashing_language":     10,
-    },
-    "flags": [
-        {
-            "type":        "Data Contradiction",
-            "severity":    "high",
-            "description": "[MOCK] Company claims a 15% reduction in carbon emissions, but external data shows a 3% increase over the same period.",
-            "source":      "Mock Data",
-        },
-        {
-            "type":        "Negative News",
-            "severity":    "high",
-            "description": "[MOCK] The company is under investigation by regulators for misleading carbon-neutral advertising.",
-            "source":      "Mock News",
-        },
-        {
-            "type":        "Vague Claims",
-            "severity":    "medium",
-            "description": "[MOCK] Sustainability report relies heavily on phrases like 'committed to net-zero' with no defined timeline.",
-            "source":      "Mock Website",
-        },
-    ],
-    "evidence": [],
-    "summary": "[MOCK MODE] This is a pre-set example report used as an emergency fallback when AI APIs are unavailable.",
-}
+# The mock fixture travels with the pack — it must stay dimension-consistent
+# with the manifest (pinned by test_pack's cross-material contracts).
+MOCK_RESULT = load_mock_result(_PACK)
 
 
 # ─── User prompt builder ──────────────────────────────────────────────────────
@@ -265,11 +218,10 @@ score the company on all five dimensions, and return the complete JSON result.""
 # ─── Post-processing ──────────────────────────────────────────────────────────
 
 def _derive_risk_level(score: int) -> str:
-    if score <= 30:
-        return "Low Risk"
-    if score <= 60:
-        return "Medium Risk"
-    return "High Risk"
+    for band in _PACK["risk_bands"]:
+        if score <= band["max"]:
+            return band["label"]
+    return _PACK["risk_bands"][-1]["label"]
 
 
 def _process_result(raw: dict, input_evidence: list[dict]) -> dict:

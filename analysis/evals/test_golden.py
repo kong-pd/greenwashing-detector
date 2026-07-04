@@ -19,7 +19,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from relevance import check_relevance          # noqa: E402
 from analyzer import analyze, RUBRIC_VERSION   # noqa: E402
 
-GOLDEN = sorted(glob.glob(os.path.join(os.path.dirname(__file__), "golden", "*.json")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from pack import load_pack, pack_path
+
+# ARCH-1 Phase A: the golden corpus is pack material — located via the
+# manifest, so a future pack brings its own goldens through the same runner.
+GOLDEN = sorted(glob.glob(os.path.join(pack_path(load_pack()["golden_dir"]), "*.json")))
 CASES = [json.load(open(p)) for p in GOLDEN]
 REAL = os.environ.get("RUN_MODEL_EVALS") == "1" and \
        os.environ.get("USE_MOCK", "").lower() != "true"
