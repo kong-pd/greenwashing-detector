@@ -5,7 +5,7 @@
 //   - Both fail reasons trigger manual input (same UX flow, different message)
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { GWD_DATA } from "../data.js";
+import { GWD_DATA, MODEL_CHAIN_LABEL, RUBRIC_VERSION } from "../data.js";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 const POLL_INTERVAL_MS = 3000;
@@ -102,7 +102,7 @@ export function normalise(raw, demoClaim) {
     riskLevel:  raw.riskLevel  || raw.risk_level || "—",
     risk_level: raw.risk_level || raw.riskLevel  || "—",
     summary:    raw.summary    || "",
-    confidence: raw.confidence ?? 0.85,
+    confidence: raw.confidence ?? null,
 
     dimensionScores: {
       specificity:               dim.specificity               ?? 0,
@@ -310,7 +310,7 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
 
   const [stepIdx,        setStepIdx]        = useState(0);
   const [doneSteps,      setDoneSteps]      = useState(new Set());
-  const [confidence,     setConfidence]     = useState(0);
+  const [confidence,     setConfidence]     = useState(null);
   const [partialScore,   setPartialScore]   = useState(0);
   const [evidenceFound,  setEvidenceFound]  = useState(0);
   const [contradictions, setContradictions] = useState(0);
@@ -367,7 +367,12 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
     const progress = Math.min(1,
       (stepIdx + (doneSteps.size > stepIdx ? 1 : 0)) / steps.length,
     );
-    setConfidence(Math.round(progress * (target.confidence ?? 0.85) * 100));
+    const reportedConfidence = apiResult?.confidence;
+    setConfidence(
+      reportedConfidence == null
+        ? null
+        : Math.round(progress * reportedConfidence * 100),
+    );
     setPartialScore(Math.round(progress * (target.score ?? 0)));
     setEvidenceFound(Math.round(progress * (target.evidence?.length ?? 0)));
     setContradictions(Math.round(
@@ -585,7 +590,7 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
             <span className="ana-context-ticker mono">MANUAL INPUT</span>
           )}
         </div>
-        <div className="mono small mute">Gemini / Groq · rubric v3.2</div>
+        <div className="mono small mute">{MODEL_CHAIN_LABEL} · rubric v{RUBRIC_VERSION}</div>
       </div>
 
       <div className="ana-stage">
@@ -613,7 +618,7 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
             </div>
             <div className="ana-claim-meta-row">
               <span className="mute">AI engine</span>
-              <span className="mono">gemini-2.5 → groq-llama</span>
+              <span className="mono">{MODEL_CHAIN_LABEL}</span>
             </div>
             {apiResult?.contentSource === "snippet" && (
               <div className="ana-claim-meta-row">
@@ -625,7 +630,7 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
             )}
             <div className="ana-claim-meta-row">
               <span className="mute">Rubric</span>
-              <span className="mono">v3.2 · 5 dimensions · 0–100</span>
+              <span className="mono">v{RUBRIC_VERSION} · 5 dimensions · 0–100</span>
             </div>
             <div className="ana-claim-meta-row">
               <span className="mute">Standards</span>
@@ -642,7 +647,7 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
                 <span></span><span></span><span></span>
               </span>
             </h1>
-            <div className="ana-subtle mono">Gemini / Groq · rubric v3.2</div>
+            <div className="ana-subtle mono">{MODEL_CHAIN_LABEL} · rubric v{RUBRIC_VERSION}</div>
           </div>
 
           <ol className="ana-steps">
@@ -732,11 +737,14 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
           <div className="ana-signal-card">
             <div className="signal-lbl mono small">CONFIDENCE</div>
             <div className="signal-num small-num">
-              {confidence}<span className="pct">%</span>
+              {confidence == null ? "—" : confidence}
+              {confidence != null && <span className="pct">%</span>}
             </div>
-            <div className="signal-sub mono small mute">model-reported</div>
+            <div className="signal-sub mono small mute">
+              {confidence == null ? "awaiting model report" : "model-reported"}
+            </div>
             <div className="signal-conf-bar">
-              <div className="signal-conf-fill" style={{ width: confidence + "%" }} />
+              <div className="signal-conf-fill" style={{ width: (confidence ?? 0) + "%" }} />
             </div>
           </div>
 

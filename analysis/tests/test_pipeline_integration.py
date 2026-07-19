@@ -83,8 +83,9 @@ def test_pipeline_completes_and_writes_table_contract(fake_db, monkeypatch):
     final = updates[-1][1]
     assert final["status"] == "completed"
     # Exactly the columns B's get_job/_normalise_job consume (wiki 06 contract):
-    for col in ("score", "risk_level", "summary", "sources",
-                "dimension_scores", "completed_at"):
+    for col in ("score", "risk_level", "confidence", "summary", "sources",
+                "dimension_scores", "model_used", "model_layer",
+                "rubric_version", "completed_at"):
         assert col in final, col
     assert isinstance(final["sources"], list)
 
@@ -98,6 +99,41 @@ def test_pipeline_completes_and_writes_table_contract(fake_db, monkeypatch):
     assert relay and relay["status"] == "completed"
     assert relay["company_name"] == "Acme Corp"
     assert isinstance(relay.get("analysis_flags"), list)
+    assert relay["confidence"] == 0.85
+    assert any(e.get("name") == "db_saved" for e in relay.get("events") or [])
+
+
+def test_save_result_reports_relay_only_when_db_write_fails(monkeypatch):
+    _RELAY.clear()
+
+    def unavailable():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(analysis_main, "get_db", unavailable)
+    result = {
+        "score": 44, "risk_level": "Medium Risk", "confidence": 0.61,
+        "summary": "s", "dimension_scores": {}, "flags": [], "evidence": [],
+        "model_used": "test-model", "model_layer": 2, "rubric_version": "3.3",
+    }
+
+    assert analysis_main.save_result("it-relay", result, "Relay Co") == "relay"
+    assert _relay_get("it-relay")["status"] == "completed"
+
+
+def test_db_client_uses_bounded_postgrest_timeout(monkeypatch):
+    captured = {}
+
+    def fake_create_client(url, key, options):
+        captured.update(url=url, key=key, options=options)
+        return "client"
+
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "test-key")
+    monkeypatch.setattr(analysis_main, "_DB_TIMEOUT_SECONDS", 0.75)
+    monkeypatch.setattr(analysis_main, "create_client", fake_create_client)
+
+    assert analysis_main.get_db() == "client"
+    assert captured["options"].postgrest_client_timeout == 0.75
 
 
 # ── 4: snippet middle state — degraded but completed ──────────────────────────

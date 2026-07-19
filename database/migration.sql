@@ -8,6 +8,14 @@
 ALTER TABLE analysis_jobs
     ADD COLUMN IF NOT EXISTS dimension_scores JSONB;
 
+-- Preserve result provenance instead of replacing missing values with UI
+-- defaults. Safe to run repeatedly.
+ALTER TABLE analysis_jobs
+    ADD COLUMN IF NOT EXISTS confidence NUMERIC(4,3),
+    ADD COLUMN IF NOT EXISTS model_used TEXT,
+    ADD COLUMN IF NOT EXISTS model_layer SMALLINT,
+    ADD COLUMN IF NOT EXISTS rubric_version TEXT;
+
 -- 2. Add severity column to flags (was missing in v1)
 ALTER TABLE analysis_flags
     ADD COLUMN IF NOT EXISTS severity TEXT NOT NULL DEFAULT 'medium';

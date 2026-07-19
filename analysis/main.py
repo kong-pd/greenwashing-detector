@@ -15,17 +15,22 @@ from analyzer import analyze
 from tracing import Trace, StageMeta, run_stage
 from relevance import check_relevance
 import os
-from supabase import create_client
+from supabase import ClientOptions, create_client
 
 load_dotenv()
 
 app = FastAPI(title="GreenCheck Analysis Service")
+_DB_TIMEOUT_SECONDS = float(os.environ.get("SUPABASE_TIMEOUT_SECONDS", "5"))
 
 
 # ── DB client ────────────────────────────────────────────────────────────────
 
 def get_db():
-    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_ANON_KEY"])
+    return create_client(
+        os.environ["SUPABASE_URL"],
+        os.environ["SUPABASE_ANON_KEY"],
+        options=ClientOptions(postgrest_client_timeout=_DB_TIMEOUT_SECONDS),
+    )
 
 
 # ── Models ───────────────────────────────────────────────────────────────────
@@ -111,6 +116,7 @@ def save_result(job_id: str, result: dict, company_name: str = ""):
         "step":             None,
         "score":            result.get("score"),
         "risk_level":       result.get("risk_level"),
+        "confidence":       result.get("confidence"),
         "summary":          result.get("summary"),
         "sources":          result.get("evidence") or [],
         "dimension_scores": dim_scores,
@@ -121,6 +127,7 @@ def save_result(job_id: str, result: dict, company_name: str = ""):
         "rubric_version":   result.get("rubric_version"),
     })
 
+    persisted_to = "relay"
     try:
         db = get_db()
 
@@ -128,9 +135,13 @@ def save_result(job_id: str, result: dict, company_name: str = ""):
             "status":           "completed",
             "score":            result.get("score"),
             "risk_level":       result.get("risk_level"),
+            "confidence":       result.get("confidence"),
             "summary":          result.get("summary"),
             "sources":          result.get("evidence") or [],
             "dimension_scores": dim_scores,
+            "model_used":       result.get("model_used"),
+            "model_layer":      result.get("model_layer"),
+            "rubric_version":   result.get("rubric_version"),
             "completed_at":     completed_at,
         }).eq("id", job_id).execute()
 
@@ -153,11 +164,12 @@ def save_result(job_id: str, result: dict, company_name: str = ""):
               f"risk={result.get('risk_level')}, "
               f"flags={len(result.get('flags') or [])}, "
               f"evidence={len(result.get('evidence') or [])}")
+        persisted_to = "db"
 
     except Exception as e:
         print(f"[{job_id}] save_result DB write failed — "
               f"result is still served via the in-memory relay (NFR-09): {e}")
-    return "relay"
+    return persisted_to
 
 def save_failed(job_id: str, reason: str):
     """
@@ -256,7 +268,7 @@ async def process(req: RunRequest):
            scraping_not_found — no ESG page found in Google results
            scraping_blocked   — page found but access denied / timed out
       2. Enrich with external evidence (NewsAPI + CDP stub)
-      3. Score with AI (Gemini → Groq → Claude → local_cache → mock)
+      3. Score with AI (Gemini → Groq → Claude; fail closed in production)
       4. Persist to Supabase
     """
     print(f"[{req.job_id}] starting pipeline for '{req.company_name}'")

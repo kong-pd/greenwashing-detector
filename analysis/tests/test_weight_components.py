@@ -11,6 +11,7 @@ Schema). These tests pin it:
 
 import sys, os
 from datetime import date, timedelta
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -167,6 +168,24 @@ def test_process_result_uses_input_evidence_when_ai_omits_it():
     out = _process_result(raw, inp)
     assert len(out["evidence"]) == 1
     assert out["evidence"][0]["reliability"] == 0.85   # BBC Tier-1 floor
+
+
+@pytest.mark.parametrize("reported, expected", [
+    (0.73, 0.73),
+    (1.4, 1.0),
+    (-0.2, 0.0),
+])
+def test_process_result_preserves_and_clamps_model_confidence(reported, expected):
+    raw = {"score": 40, "risk_level": "Medium Risk", "confidence": reported,
+           "summary": "", "dimension_scores": {}, "flags": [], "evidence": []}
+    assert _process_result(raw, [])["confidence"] == expected
+
+
+@pytest.mark.parametrize("reported", [None, "unknown", float("nan")])
+def test_process_result_does_not_invent_missing_confidence(reported):
+    raw = {"score": 40, "risk_level": "Medium Risk", "confidence": reported,
+           "summary": "", "dimension_scores": {}, "flags": [], "evidence": []}
+    assert _process_result(raw, [])["confidence"] is None
 
 
 # ── parsing & date utilities ───────────────────────────────────────────────────

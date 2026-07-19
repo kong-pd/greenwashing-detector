@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 
 import { DIMENSION_META } from "../components/SharedComponents.jsx";
 import { FLAG_TYPES } from "../regmap.js";
+import { RUBRIC_VERSION } from "../data.js";
 
 const pack = JSON.parse(readFileSync(
   fileURLToPath(new URL("../../../analysis/packs/greenwash/pack.json", import.meta.url)),
@@ -38,5 +39,9 @@ describe("frontend ↔ greenwash pack parity", () => {
 
   it("the dimension scale matches (bars and tone thresholds assume 0–20)", () => {
     expect(pack.dimension_max).toBe(20);
+  });
+
+  it("the visible rubric version matches the active pack", () => {
+    expect(RUBRIC_VERSION).toBe(pack.rubric_version);
   });
 });

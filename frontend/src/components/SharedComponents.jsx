@@ -418,7 +418,7 @@ export function MethodologyPanel() {
         <p>
           Each claim is scored across five dimensions (0–20 per dimension, 0–100 total)
           aligned to internationally recognised ESG disclosure standards.
-          AI analysis uses Claude Sonnet 4 with a structured system prompt encoding these rubrics;
+          AI analysis uses a versioned rubric across the configured Gemini, Groq, and optional Claude fallback chain;
           all weights are post-processed through deterministic clamping bands.
         </p>
       </div>

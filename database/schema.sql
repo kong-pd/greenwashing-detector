@@ -17,6 +17,10 @@ CREATE TABLE IF NOT EXISTS analysis_jobs (
     fail_reason      TEXT,
     score            INTEGER,                       -- 0–100
     risk_level       TEXT,                          -- 'Low Risk' | 'Medium Risk' | 'High Risk'
+    confidence       NUMERIC(4,3),                  -- nullable model-reported 0–1 value
+    model_used       TEXT,                          -- provider/model label selected by fallback chain
+    model_layer      SMALLINT,                      -- 1-based fallback layer
+    rubric_version   TEXT,                          -- scoring rubric used for this run
     summary          TEXT,
     sources          JSONB,                         -- full evidence object array
     dimension_scores JSONB,                         -- { specificity, data_consistency, ... }
@@ -68,4 +72,5 @@ CREATE INDEX IF NOT EXISTS idx_cache_company    ON cached_companies (company_nam
 --
 -- Expected columns:
 --   id, company_name, status, step, fail_reason, score, risk_level,
---   summary, sources, dimension_scores, raw_content, created_at, completed_at
+--   confidence, model_used, model_layer, rubric_version, summary, sources,
+--   dimension_scores, raw_content, created_at, completed_at

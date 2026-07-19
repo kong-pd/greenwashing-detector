@@ -6,7 +6,7 @@ import os
 import json
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-from supabase import create_client
+from supabase import ClientOptions, create_client
 
 # ─── Cache TTL ────────────────────────────────────────────────────────────────
 # Completed jobs are reused as cache hits only if completed within this window.
@@ -14,11 +14,13 @@ from supabase import create_client
 # showcases; production can raise it to 168 (1 week) or align with disclosure cycles.
 
 _CACHE_TTL_HOURS = int(os.environ.get("CACHE_TTL_HOURS", "24"))
+_DB_TIMEOUT_SECONDS = float(os.environ.get("SUPABASE_TIMEOUT_SECONDS", "5"))
 
 
 # ─── Local cache (read fallback when Supabase is unavailable) ─────────────────
 
 _CACHE_PATH = Path(__file__).resolve().parent.parent.parent / "analysis" / "local_cache.json"
+_DEFAULT_RUBRIC_VERSION = "3.3"
 
 def _load_local_cache() -> dict:
     try:
@@ -94,6 +96,10 @@ def _cache_to_job(company_name: str, cached: dict) -> dict:
         "fail_reason":  None,
         "score":        cached.get("score"),
         "risk_level":   cached.get("risk_level") or cached.get("riskLevel"),
+        "confidence":   cached.get("confidence"),
+        "model_used":   "local-cache",
+        "model_layer":  None,
+        "rubric_version": cached.get("rubric_version") or _DEFAULT_RUBRIC_VERSION,
         "summary":      cached.get("summary"),
         "sources":      evidence,
         "created_at":   None,
@@ -115,7 +121,11 @@ def _cache_to_job(company_name: str, cached: dict) -> dict:
 # ─── Supabase helpers ─────────────────────────────────────────────────────────
 
 def get_client():
-    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_ANON_KEY"])
+    return create_client(
+        os.environ["SUPABASE_URL"],
+        os.environ["SUPABASE_ANON_KEY"],
+        options=ClientOptions(postgrest_client_timeout=_DB_TIMEOUT_SECONDS),
+    )
 
 
 def create_job(job_id: str, company_name: str):

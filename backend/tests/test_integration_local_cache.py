@@ -137,6 +137,13 @@ def relay_backed_analysis(monkeypatch):
         return _Resp(analysis_client.get(path))
 
     monkeypatch.setattr(routes_mod.httpx, "get", fake_get)
+    monkeypatch.setattr(
+        routes_mod,
+        "get_job",
+        lambda _job_id: pytest.fail(
+            "an active relay result must not wait for the database"
+        ),
+    )
     return analysis_main._relay_put
 
 
@@ -171,6 +178,45 @@ def test_relay_processing_state_passthrough(relay_backed_analysis):
 
 
 # ── PDF generator hardening ────────────────────────────────────────────────────
+
+def test_pdf_renderer_contract_is_windows_safe_and_escapes_html(monkeypatch):
+    """Exercise the complete HTML builder without requiring native Pango.
+
+    The fake renderer deliberately re-opens the output path, pinning the
+    Windows contract that NamedTemporaryFile must be closed first.
+    """
+    import sys
+    from types import SimpleNamespace
+
+    captured = {}
+
+    class FakeHTML:
+        def __init__(self, string):
+            captured["html"] = string
+
+        def write_pdf(self, path):
+            with open(path, "wb") as output:
+                output.write(b"%PDF-renderer-contract")
+
+    monkeypatch.setitem(sys.modules, "weasyprint", SimpleNamespace(HTML=FakeHTML))
+
+    from pdf.generator import generate_pdf
+    path = generate_pdf({
+        "id": "contract-1",
+        "company_name": "<script>alert(1)</script> & Co",
+        "score": 61,
+        "risk_level": "High Risk",
+        "summary": "Summary with <b>tags</b>",
+        "model_used": "test-model",
+        "rubric_version": "3.3",
+    })
+
+    assert open(path, "rb").read().startswith(b"%PDF-")
+    assert "<script>alert(1)</script>" not in captured["html"]
+    assert "&lt;script&gt;alert(1)&lt;/script&gt; &amp; Co" in captured["html"]
+    assert "AI engine: test-model" in captured["html"]
+    assert "Rubric v3.3" in captured["html"]
+
 
 def test_pdf_survives_injection_and_mixed_evidence():
     from pdf.generator import generate_pdf
