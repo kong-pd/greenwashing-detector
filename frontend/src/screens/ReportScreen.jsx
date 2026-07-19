@@ -12,6 +12,7 @@ import {
 import { gwdToast } from "../toast.js";
 import { toHref } from "../utils.js";
 import { INDICATIVE_NOTE } from "../regmap.js";
+import { MODEL_CHAIN_LABEL, RUBRIC_VERSION } from "../data.js";
 
 // ── Flag → evidence traceability (auditability) ──────────────────────────────
 // Resolve which evidence item a flag's `source` string refers to, so clicking
@@ -40,9 +41,20 @@ export function findEvidenceForFlag(flag, evidence) {
   return bestScore >= 2 ? best : null;
 }
 
+export function formatConfidence(value) {
+  return Number.isFinite(value) && value >= 0 && value <= 1
+    ? `${Math.round(value * 100)}%`
+    : "Not reported";
+}
+
 export function ReportScreen({ claim, query, origin = "search", scoreVariant = "arc", onBack, onOpenEvidence, watched = false, onToggleWatch }) {
   const [showMeth, setShowMeth] = useState(false);
   const band = riskBand(claim.score);
+  const rubricVersion = claim.rubricVersion || RUBRIC_VERSION;
+  const modelLabel = claim.modelUsed
+    ? `${claim.modelUsed}${claim.modelLayer != null ? ` (layer ${claim.modelLayer})` : ""}`
+    : MODEL_CHAIN_LABEL;
+  const confidenceLabel = formatConfidence(claim.confidence);
 
   // Evidence backing the summary: explicit claim.summaryRefs if authored,
   // otherwise derived from the evidence each flag resolves to (auditable).
@@ -172,7 +184,7 @@ export function ReportScreen({ claim, query, origin = "search", scoreVariant = "
             <span className="sep">·</span>
             <span>GreenCheck ESG Engine</span>
             <span className="sep">·</span>
-            <span>{claim.modelUsed ? `${claim.modelUsed} (layer ${claim.modelLayer})` : "Gemini / Groq"} · rubric v{claim.rubricVersion || "3.2"}</span>
+            <span>{modelLabel} · rubric v{rubricVersion}</span>
           </div>
 
           <h1 className="rep-mast-title">{claim.headline}</h1>
@@ -204,7 +216,7 @@ export function ReportScreen({ claim, query, origin = "search", scoreVariant = "
               </div>
               <div className="rep-vm-row">
                 <div className="rep-vm-lbl mono small mute">MODEL CONFIDENCE</div>
-                <div className="rep-vm-val mono">{Math.round((claim.confidence ?? 0.85) * 100)}%</div>
+                <div className="rep-vm-val mono">{confidenceLabel}</div>
               </div>
               <div className="rep-vm-row">
                 <div className="rep-vm-lbl mono small mute">EVIDENCE SOURCES</div>
@@ -276,11 +288,11 @@ export function ReportScreen({ claim, query, origin = "search", scoreVariant = "
             <div className="rep-summary-side">
               <div className="rep-byline mono small mute">
                 <div>Prepared by</div>
-                <div className="rep-byline-name">GWD Analyzer · {claim.modelUsed ? `${claim.modelUsed} (layer ${claim.modelLayer})` : "Gemini / Groq"}</div>
+                <div className="rep-byline-name">GWD Analyzer · {modelLabel}</div>
               </div>
               <div className="rep-byline mono small mute">
                 <div>Rubric version</div>
-                <div className="rep-byline-name">v{claim.rubricVersion || "3.2"} · 5 dimensions · 0–100</div>
+                <div className="rep-byline-name">v{rubricVersion} · 5 dimensions · 0–100</div>
               </div>
               <div className="rep-byline mono small mute">
                 <div>Standards aligned</div>

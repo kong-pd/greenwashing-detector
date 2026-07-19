@@ -65,8 +65,11 @@ AI fallback chain:
 4. Groq Llama 3.3 70B — 1,000/day, independent provider
 5. Groq Llama 3.1 8B
 6. Claude Sonnet 4 — optional paid layer
-7. `local_cache.json` — pre-computed, zero network
-8. generic mock
+
+Production fails closed when every configured provider is exhausted: no score
+is returned and no fixture is presented as a real verdict. `local_cache.json`
+is a web-service fast path for the five named demo companies, while the generic
+fixture is available only when `USE_MOCK=true` is explicitly enabled.
 
 If Supabase is down, results still reach the user via an in-memory relay on the analysis service — including the history list: `/api/history` merges relay rows into the Supabase view and labels anything not yet persisted "this session".
 
@@ -144,7 +147,7 @@ cd frontend && npm test           # vitest: API contracts, error copy
 
 # AI evals (golden set, runs hermetically; add RUN_MODEL_EVALS=1 + real keys for score bands)
 pytest analysis/evals/ -v
-python -m evals.compare --label v3.2 [--against <old-label>]   # offline prompt regression
+python -m evals.compare --label v3.3 [--against <old-label>]   # offline prompt regression
 
 # Browser E2E (22 journeys, ~3min)
 cd e2e && npm ci && npx playwright install chromium
@@ -219,7 +222,7 @@ frontend/src/
 analysis/
   tracing.py            trace/event log + stage contract (the spine)
   relevance.py          AI-1 gate — refuses non-ESG content before scoring
-  prompts/              versioned prompt files (rubric v3.2)
+  prompts/              versioned prompt files (current rubric v3.3)
   evals/                golden set · pytest runner · compare · failure corpus
 
 e2e/

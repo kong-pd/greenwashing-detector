@@ -1,9 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes.analyze import router as analyze_router
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Route imports load DB configuration at module scope, so dotenv must be
+# populated first (CACHE_TTL_HOURS / SUPABASE_TIMEOUT_SECONDS included).
+from routes.analyze import router as analyze_router
 
 app = FastAPI(title="Greenwashing Detector API")
 

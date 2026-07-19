@@ -107,7 +107,7 @@ function makeLiveClaim(companyName) {
     riskLevel:      "—",
     risk_level:     "—",
     summary:        "",
-    confidence:     0.85,
+    confidence:     null,
     flags:          [],
     evidence:       [],
     dimensionScores: {

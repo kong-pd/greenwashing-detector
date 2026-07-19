@@ -3,14 +3,14 @@
 import { describe, it, expect } from "vitest";
 import { normalise, getScrapingCopy, isScrapingFailure, getAnalysisErrorCopy }
   from "../screens/AnalysisScreen.jsx";
-import { weightFactors, findEvidenceForFlag }
+import { weightFactors, findEvidenceForFlag, formatConfidence }
   from "../screens/ReportScreen.jsx";
 
 const demoClaim = {
   id: "LIVE", headline: "Acme", company_name: "Acme",
   shortQuote: "", source: "GreenCheck live analysis", sourceType: "AI Analysis",
   capturedAt: "2026-06-10", analyzedAt: "2026-06-10",
-  score: 0, riskLevel: "—", risk_level: "—", summary: "", confidence: 0.85,
+  score: 0, riskLevel: "—", risk_level: "—", summary: "", confidence: null,
   flags: [], evidence: [],
   dimensionScores: { specificity: 0, data_consistency: 0,
     third_party_certification: 0, negative_news: 0, greenwashing_language: 0 },
@@ -46,6 +46,13 @@ describe("normalise", () => {
     expect(out.flags[0].severity).toBe("high");
   });
 
+  it("preserves model confidence without inventing a default", () => {
+    expect(normalise({ status: "completed", score: 10, confidence: 0.73 }, demoClaim)
+      .confidence).toBe(0.73);
+    expect(normalise({ status: "completed", score: 10 }, demoClaim)
+      .confidence).toBeNull();
+  });
+
   it("Phase-6: completed + snippet marker coexist → contentSource=snippet", () => {
     const out = normalise({
       status: "completed", score: 40,
@@ -59,6 +66,19 @@ describe("normalise", () => {
     const out = normalise({ status: "completed", score: 40 }, demoClaim);
     expect(out.contentSource).toBe("page");
     expect(out.failReason).toBeNull();
+  });
+});
+
+describe("formatConfidence", () => {
+  it("renders a model-reported value", () => {
+    expect(formatConfidence(0.734)).toBe("73%");
+  });
+
+  it("labels missing or invalid values honestly", () => {
+    expect(formatConfidence(null)).toBe("Not reported");
+    expect(formatConfidence(Number.NaN)).toBe("Not reported");
+    expect(formatConfidence(-0.1)).toBe("Not reported");
+    expect(formatConfidence(1.1)).toBe("Not reported");
   });
 });
 

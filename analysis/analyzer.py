@@ -2,8 +2,8 @@ import anthropic
 import google.generativeai as genai
 import httpx
 import json
+import math
 import os
-from pathlib import Path
 
 from sanitize import neutralise_sentinels
 from pack import load_pack, pack_path, load_mock_result
@@ -13,34 +13,6 @@ from pack import load_pack, pack_path, load_mock_result
 # and imports read the same constants — now bound to the pack instead of
 # hardcoded. Loading at import time = fail loud at boot, by design.
 _PACK = load_pack()
-
-# ─── Local cache ──────────────────────────────────────────────────────────────
-
-_CACHE_PATH = Path(__file__).resolve().parent / "local_cache.json"
-
-def _load_local_cache() -> dict:
-    try:
-        with open(_CACHE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Local cache load failed: {e}")
-        return {}
-
-_LOCAL_CACHE = _load_local_cache()
-
-
-def _lookup_local_cache(company_name: str) -> dict | None:
-    key = company_name.strip().lower()
-    if key in _LOCAL_CACHE:
-        print(f"Local cache hit (exact): {key}")
-        return _LOCAL_CACHE[key]
-    for cache_key, result in _LOCAL_CACHE.items():
-        if cache_key in key or key in cache_key:
-            print(f"Local cache hit (partial): '{key}' → '{cache_key}'")
-            return result
-    print(f"Local cache miss: {key}")
-    return None
-
 
 # ─── Weight clamping & explainable components ────────────────────────────────
 # M5 contract (wiki 10 · Weight Component Schema):
@@ -262,11 +234,23 @@ def _process_result(raw: dict, input_evidence: list[dict]) -> dict:
             or risk_level != _derive_risk_level(score):
         risk_level = _derive_risk_level(score)
 
+    # Confidence is model output, not an engineering constant. Preserve it
+    # only when it is a finite 0–1 number; missing/invalid values stay None so
+    # downstream layers can say "not reported" instead of inventing 85%.
+    try:
+        confidence = float(raw.get("confidence"))
+        if not math.isfinite(confidence):
+            confidence = None
+        else:
+            confidence = round(max(0.0, min(1.0, confidence)), 2)
+    except (TypeError, ValueError):
+        confidence = None
+
     return {
         "score":      score,
         "risk_level": risk_level,
         "riskLevel":  risk_level,
-        "confidence": 0.85,
+        "confidence": confidence,
         "summary":    raw.get("summary", ""),
         "dimension_scores":  dim,
         "dimensionScores": {
@@ -469,8 +453,9 @@ def analyze(company_name: str, content: str,
       5. Groq Llama 3.3 70B    (backup-3  — 1,000 req/day free, independent provider)
       6. Groq Llama 3.1 8B     (backup-4  — lighter Groq model)
       7. Claude Sonnet          (optional paid fallback)
-      8. Local cache            (zero-network, demo companies)
-      9. Generic mock           (absolute last resort)
+    Production fails closed after the configured providers are exhausted.
+    Demo fixtures are available only through explicit USE_MOCK mode; the
+    web-service owns company-cache lookup before a live run is dispatched.
     """
     ev = evidence_list or []
     _e = emit or _noop_emit
@@ -520,43 +505,9 @@ def analyze(company_name: str, content: str,
     else:
         print("Claude skipped — ANTHROPIC_API_KEY not configured")
 
-    # ── Layer 8: Local cache ──────────────────────────────────────────────────
-    cached = _lookup_local_cache(company_name)
-    if cached:
-        print(f"Using local cache for: {company_name}")
-        import copy
-        cached = copy.deepcopy(cached)   # never mutate the module-level cache
-        for flag in cached.get("flags", []):
-            if "severity" not in flag:
-                t = flag.get("type", "")
-                flag["severity"] = (
-                    "high"   if t in ("Data Contradiction", "Negative News") else
-                    "medium" if t in ("Vague Claims", "Lack of Certification") else
-                    "low"
-                )
-        if "dimensionScores" not in cached and "dimension_scores" in cached:
-            cached["dimensionScores"] = cached["dimension_scores"]
-        if "riskLevel" not in cached and "risk_level" in cached:
-            cached["riskLevel"] = cached["risk_level"]
-        if not cached.get("evidence"):
-            legacy = cached.get("sources") or []
-            if legacy and isinstance(legacy[0], str):
-                # legacy string sources → minimal objects through the same pass
-                cached["evidence"] = _normalise_evidence([
-                    {"id": f"E-{i+1:02d}", "kind": "News", "title": s,
-                     "org": "", "date": "", "url": s if s.startswith("http") else "",
-                     "quote": "", "weight": None}
-                    for i, s in enumerate(legacy)
-                ])
-            else:
-                cached["evidence"] = _normalise_evidence(ev) if ev else []
-        cached = _annotate(cached, "local-cache", 8)
-        _e("success", "model_used", level="user", model="local-cache", layer=8)
-        return cached
-
-    # ── Layer 9: Generic mock ─────────────────────────────────────────────────
-    print(f"All layers failed for '{company_name}' — returning generic mock")
-    import copy
-    result = _annotate(copy.deepcopy(MOCK_RESULT), "mock", 9)
-    _e("success", "model_used", level="user", model="mock", layer=9)
-    return result
+    # Cache lookup belongs to the web-service and has already happened before
+    # a live job reaches this service. Never substitute cached/demo content for
+    # a failed analysis here, especially when the user supplied manual text.
+    print(f"All configured model layers failed for '{company_name}'; no verdict produced")
+    _e("error", "all_models_failed", level="user")
+    return None

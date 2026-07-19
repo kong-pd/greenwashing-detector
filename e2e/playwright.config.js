@@ -11,9 +11,9 @@
 //   USE_MOCK=true        → analyzer layer 1 short-circuits before any AI call
 //   SERPER_API_KEY=""    → scraper returns scraping_not_found with ZERO network
 //                          (exercises the FR-04 manual-input journey for real)
-//   SUPABASE_URL=:59999  → nothing listens there; every DB call fails in ~20ms
-//                          with ConnectError, forcing the NFR-09 in-memory
-//                          relay to carry results end-to-end
+//   SUPABASE_URL=:59999  → nothing listens there; the explicit 0.5s DB timeout
+//                          forces the NFR-09 in-memory relay to carry results
+//                          even when the OS drops rather than rejects the call
 //   local_cache.json     → the five demo companies exercise the cache fast path
 //
 // In other words: the same degradation ladder the app ships for resilience is
@@ -21,6 +21,12 @@
 // production feature, not test scaffolding.
 
 import { defineConfig, devices } from "@playwright/test";
+
+// setup-python exposes `python` on Windows and `python3` on Linux/macOS.
+// Keeping this platform-aware lets the same real-topology suite run locally
+// and in GitHub Actions instead of silently waiting for a missing executable.
+const PYTHON = process.platform === "win32" ? "python" : "python3";
+const BROWSER_CHANNEL = process.env.PLAYWRIGHT_CHANNEL;
 
 // JWT-shaped but cryptographically meaningless — supabase-py validates the
 // *shape* of the anon key at client init, so a bare "placeholder" string
@@ -44,6 +50,7 @@ const PY_ENV = {
   ANTHROPIC_API_KEY: "",
   ANALYSIS_SERVICE_URL: "http://127.0.0.1:8001",
   CACHE_TTL_HOURS: "24",
+  SUPABASE_TIMEOUT_SECONDS: "0.5",
 };
 
 export default defineConfig({
@@ -66,11 +73,17 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
 
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [{
+    name: BROWSER_CHANNEL || "chromium",
+    use: {
+      ...devices["Desktop Chrome"],
+      ...(BROWSER_CHANNEL ? { channel: BROWSER_CHANNEL } : {}),
+    },
+  }],
 
   webServer: [
     {
-      command: "python3 -m uvicorn main:app --port 8000",
+      command: `${PYTHON} -m uvicorn main:app --port 8000`,
       cwd: "../backend",
       url: "http://127.0.0.1:8000/health",
       env: PY_ENV,
@@ -78,7 +91,7 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: "python3 -m uvicorn main:app --port 8001",
+      command: `${PYTHON} -m uvicorn main:app --port 8001`,
       cwd: "../analysis",
       url: "http://127.0.0.1:8001/health",
       env: PY_ENV,

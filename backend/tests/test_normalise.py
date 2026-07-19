@@ -14,6 +14,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import db.supabase as supabase_db
 from db.supabase import coerce_evidence_objects, _cache_to_job
 from routes.analyze import _normalise_job
 
@@ -23,6 +24,22 @@ FULL_EV = {
     "date": "2026-05-01", "url": "https://x", "quote": "q" * 25,
     "weight": 0.78, "reliability": 0.85, "recency": 0.8, "relevance": 0.78,
 }
+
+
+def test_supabase_client_uses_bounded_postgrest_timeout(monkeypatch):
+    captured = {}
+
+    def fake_create_client(url, key, options):
+        captured.update(url=url, key=key, options=options)
+        return "client"
+
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "test-key")
+    monkeypatch.setattr(supabase_db, "_DB_TIMEOUT_SECONDS", 0.75)
+    monkeypatch.setattr(supabase_db, "create_client", fake_create_client)
+
+    assert supabase_db.get_client() == "client"
+    assert captured["options"].postgrest_client_timeout == 0.75
 
 
 # ── coerce_evidence_objects ────────────────────────────────────────────────────
@@ -77,6 +94,9 @@ def test_cache_to_job_prefers_evidence_objects_and_keeps_components():
     }
     job = _cache_to_job("NewCo", entry)
     assert job["sources"][0]["reliability"] == 0.85
+    assert job["model_used"] == "local-cache"
+    assert job["model_layer"] is None
+    assert job["rubric_version"] == "3.3"
 
 def test_cache_to_job_flag_severity_default():
     entry = {"score": 1, "risk_level": "Low Risk", "summary": "",
@@ -92,7 +112,8 @@ def _base_job(**over):
     job = {
         "id": "j1", "company_name": "Acme", "status": "completed",
         "step": None, "fail_reason": None, "score": 42,
-        "risk_level": "Medium Risk", "summary": "s",
+        "risk_level": "Medium Risk", "confidence": 0.73, "summary": "s",
+        "model_used": "primary", "model_layer": 2, "rubric_version": "3.3",
         "sources": [FULL_EV],
         "dimension_scores": {"specificity": 8, "data_consistency": 9,
                              "third_party_certification": 8,
@@ -109,6 +130,13 @@ def test_normalise_job_dual_casing_and_components():
     assert out["dimension_scores"] == out["dimensionScores"]
     assert out["evidence"][0]["relevance"] == 0.78          # M5 passthrough
     assert out["sources"] == ["https://x"]                  # legacy URL list derived
+    assert out["confidence"] == 0.73
+    assert out["model_used"] == "primary"
+    assert out["rubric_version"] == "3.3"
+
+
+def test_normalise_job_keeps_missing_confidence_missing():
+    assert _normalise_job(_base_job(confidence=None))["confidence"] is None
 
 def test_normalise_job_legacy_string_sources_coerced():
     out = _normalise_job(_base_job(sources=["https://a", "https://b"]))

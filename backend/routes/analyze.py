@@ -80,7 +80,7 @@ def _normalise_job(job: dict) -> dict:
         "score":      job.get("score"),
         "risk_level": job.get("risk_level"),
         "riskLevel":  job.get("risk_level"),
-        "confidence": 0.85,
+        "confidence": job.get("confidence"),
         "summary":    job.get("summary", ""),
         "dimension_scores": dim,
         "dimensionScores": {
@@ -261,11 +261,12 @@ def get_report(job_id: str):
             return _normalise_job(job)
         return {"error": "Job not found"}
 
-    job = get_job(job_id)
-    if not job:
-        # NFR-09: DB unreachable / write never landed — ask the analysis
-        # service's in-memory relay before giving up.
-        job = _relay_lookup(job_id)
+    # Active jobs always have a relay projection, regardless of whether the
+    # DB write succeeded. Read it first so a slow/unavailable Supabase cannot
+    # consume the polling thread pool and hide a result that is already ready.
+    # Once the analysis service has restarted and forgotten the FIFO entry,
+    # durable/legacy reports naturally fall through to Supabase.
+    job = _relay_lookup(job_id) or get_job(job_id)
     if not job:
         return {"error": "Job not found"}
     return _normalise_job(job)
@@ -277,7 +278,7 @@ def download_pdf(job_id: str):
         company = job_id[6:]
         job = get_job_with_local_fallback(job_id, company)
     else:
-        job = get_job(job_id) or _relay_lookup(job_id)
+        job = _relay_lookup(job_id) or get_job(job_id)
 
     if not job or job.get("status") != "completed":
         return {"error": "Report not ready"}

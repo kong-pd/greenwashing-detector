@@ -2,8 +2,8 @@
 Analysis service tests — Phase 1 (current architecture only)
 
 Tests only what currently exists and works:
-- Local cache lookup (exact and partial match)
-- Analyzer fallback chain does not crash
+- Explicit mock mode returns a deterministic fixture
+- Production fallback chain fails closed when providers are exhausted
 - Evidence weight clamping works correctly
 - Enricher returns a list (empty is acceptable)
 
@@ -21,59 +21,11 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
-# ── Local cache tests ──────────────────────────────────────────────────────────
-
-def test_local_cache_loads():
-    """local_cache.json exists and loads without error."""
-    from analyzer import _LOCAL_CACHE
-    assert isinstance(_LOCAL_CACHE, dict)
-    assert len(_LOCAL_CACHE) > 0
-
-
-def test_local_cache_contains_demo_companies():
-    """All five demo companies are in the local cache."""
-    from analyzer import _LOCAL_CACHE
-    keys = list(_LOCAL_CACHE.keys())
-    for company in ["shell", "h&m", "patagonia", "tesla", "bp"]:
-        assert company in keys, f"'{company}' missing from local cache"
-
-
-def test_local_cache_exact_match():
-    """Exact company name lookup returns a result."""
-    from analyzer import _lookup_local_cache
-    result = _lookup_local_cache("patagonia")
-    assert result is not None
-    assert "score" in result
-
-
-def test_local_cache_partial_match():
-    """Partial company name lookup returns a result."""
-    from analyzer import _lookup_local_cache
-    result = _lookup_local_cache("Patagonia Inc")
-    assert result is not None
-
-
-def test_local_cache_case_insensitive():
-    """Lookup is case-insensitive."""
-    from analyzer import _lookup_local_cache
-    assert _lookup_local_cache("SHELL") is not None
-    assert _lookup_local_cache("Shell") is not None
-    assert _lookup_local_cache("shell") is not None
-
-
-def test_local_cache_miss_returns_none():
-    """Unknown company returns None (not an error)."""
-    from analyzer import _lookup_local_cache
-    result = _lookup_local_cache("CompanyThatDefinitelyDoesNotExist99999")
-    assert result is None
-
-
 # ── Analyzer fallback tests ────────────────────────────────────────────────────
 
-def test_analyzer_returns_result_for_cached_company():
+def test_analyzer_returns_result_in_explicit_mock_mode():
     """
-    With USE_MOCK=true and both APIs set to placeholder keys,
-    analyzer returns a result for a cached company via local cache.
+    USE_MOCK=true is the only mode allowed to return the generic fixture.
     """
     from analyzer import analyze
     result = analyze(
@@ -86,7 +38,7 @@ def test_analyzer_returns_result_for_cached_company():
     assert "score" in result
 
 
-def test_analyzer_returns_mock_for_unknown_company():
+def test_explicit_mock_mode_is_company_agnostic():
     """
     For an unknown company with USE_MOCK=true,
     analyzer returns the generic mock result.
@@ -100,6 +52,29 @@ def test_analyzer_returns_mock_for_unknown_company():
     )
     assert result is not None
     assert "score" in result
+
+
+def test_analyzer_fails_closed_when_all_real_providers_fail(monkeypatch):
+    """Production must never turn provider exhaustion into a demo verdict."""
+    import analyzer
+
+    monkeypatch.setenv("USE_MOCK", "false")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(analyzer, "_try_gemini_chain", lambda *a, **kw: None)
+    monkeypatch.setattr(analyzer, "_try_groq_chain", lambda *a, **kw: None)
+
+    events = []
+    result = analyzer.analyze(
+        "Shell",
+        "Net-zero Scope 1 emissions renewable energy sustainability content",
+        [],
+        "No data",
+        emit=lambda type_, name, **data: events.append((type_, name, data)),
+    )
+
+    assert result is None
+    assert any(name == "all_models_failed" for _, name, _ in events)
+    assert not any(name == "model_used" for _, name, _ in events)
 
 
 def test_analyzer_result_has_required_fields():
