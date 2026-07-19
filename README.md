@@ -77,7 +77,9 @@ If Supabase is down, results still reach the user via an in-memory relay on the 
 
 ## Pre-cached companies
 
-These five load instantly without any live API calls:
+These five are bundled with the frontend and load without the backend or any
+live API calls. CI pins the frontend copy to analysis/local_cache.json so the
+two delivery paths cannot drift:
 
 | Company | Score | Risk |
 |---------|-------|------|

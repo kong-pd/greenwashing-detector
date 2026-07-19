@@ -18,11 +18,12 @@
 import { test, expect } from "@playwright/test";
 import { startSearch, expectReport, SEARCH_PLACEHOLDER } from "./helpers.js";
 
-test("backend unreachable → honest error card, then retry recovers to a real report", async ({ page }) => {
+test("uncached company + backend unreachable → honest error, retry accepts API recovery", async ({ page }) => {
   // Simulate the web-service being down / Railway cold and refusing connections.
   await page.route("**/api/analyze", (route) => route.abort("connectionrefused"));
 
-  await startSearch(page, "Shell");
+  const company = "Aurora Textiles Group";
+  await startSearch(page, company);
 
   // The honest error state: named, explained, actionable.
   await expect(page.getByText("SERVICE UNREACHABLE", { exact: true })).toBeVisible();
@@ -34,10 +35,26 @@ test("backend unreachable → honest error card, then retry recovers to a real r
   // No report was faked into existence.
   await expect(page.locator(".rep-topbar-score-num")).toHaveCount(0);
 
-  // Service "comes back" — retry must complete the journey with REAL data.
+  // Service "comes back" — retry accepts a completed API response.
   await page.unroute("**/api/analyze");
+  await page.route("**/api/analyze", (route) => route.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify({
+      status: "completed",
+      company_name: company,
+      score: 42,
+      risk_level: "Medium Risk",
+      confidence: 0.72,
+      summary: "Recovered API response",
+      dimension_scores: {},
+      flags: [],
+      evidence: [],
+      model_used: "test-provider",
+      rubric_version: "3.3",
+    }),
+  }));
   await retry.click();
-  await expectReport(page, { score: 78, risk: "High Risk" });
+  await expectReport(page, { score: 42, risk: "Medium Risk" });
 });
 
 test("pipeline failure → error card, never a demo-data report", async ({ page }) => {

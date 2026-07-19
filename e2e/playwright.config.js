@@ -14,7 +14,7 @@
 //   SUPABASE_URL=:59999  → nothing listens there; the explicit 0.5s DB timeout
 //                          forces the NFR-09 in-memory relay to carry results
 //                          even when the OS drops rather than rejects the call
-//   local_cache.json     → the five demo companies exercise the cache fast path
+//   frontend cache       → the five demo companies exercise the zero-API path
 //
 // In other words: the same degradation ladder the app ships for resilience is
 // what makes its E2E suite hermetic. Every fallback layer asserted here is a
@@ -23,10 +23,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // setup-python exposes `python` on Windows and `python3` on Linux/macOS.
-// Keeping this platform-aware lets the same real-topology suite run locally
-// and in GitHub Actions instead of silently waiting for a missing executable.
-const PYTHON = process.platform === "win32" ? "python" : "python3";
+// PYTHON_EXECUTABLE lets Windows developers bypass .bat/shim launchers whose
+// child process Playwright cannot reliably stop after the suite completes.
+const PYTHON = process.env.PYTHON_EXECUTABLE ||
+  (process.platform === "win32" ? "python" : "python3");
+const NODE = process.execPath;
 const BROWSER_CHANNEL = process.env.PLAYWRIGHT_CHANNEL;
+const quote = (value) => `"${String(value).replaceAll('"', '\\"')}"`;
 
 // JWT-shaped but cryptographically meaningless — supabase-py validates the
 // *shape* of the anon key at client init, so a bare "placeholder" string
@@ -81,9 +84,11 @@ export default defineConfig({
     },
   }],
 
-  webServer: [
+  // Local Windows runners can own the processes externally to avoid shell/
+  // shim shutdown issues. CI and the default command still use this topology.
+  webServer: process.env.PLAYWRIGHT_EXTERNAL_SERVERS ? [] : [
     {
-      command: `${PYTHON} -m uvicorn main:app --port 8000`,
+      command: `${quote(PYTHON)} -m uvicorn main:app --port 8000`,
       cwd: "../backend",
       url: "http://127.0.0.1:8000/health",
       env: PY_ENV,
@@ -91,7 +96,7 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: `${PYTHON} -m uvicorn main:app --port 8001`,
+      command: `${quote(PYTHON)} -m uvicorn main:app --port 8001`,
       cwd: "../analysis",
       url: "http://127.0.0.1:8001/health",
       env: PY_ENV,
@@ -102,7 +107,7 @@ export default defineConfig({
       // --host 127.0.0.1: Vite's default `localhost` bind can resolve to
       // IPv6 (::1) on CI runners while the health check below probes IPv4 —
       // the check then never passes and webServer times out at 60s.
-      command: "npm run dev -- --port 5173 --strictPort --host 127.0.0.1",
+      command: `${quote(NODE)} node_modules/vite/bin/vite.js --port 5173 --strictPort --host 127.0.0.1`,
       cwd: "../frontend",
       url: "http://127.0.0.1:5173",
       reuseExistingServer: !process.env.CI,
