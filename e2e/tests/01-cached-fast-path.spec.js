@@ -1,17 +1,21 @@
 // 01 — Cached fast path (US-03).
 //
-// "Shell" is one of five pre-computed companies in analysis/local_cache.json.
-// With Supabase unreachable, POST /api/analyze falls through its three-layer
-// cache to local_cache.json and answers `status: completed` in a single round
-// trip — the browser never enters the polling loop.
+// "Shell" is one of five pre-computed companies bundled with the frontend.
+// The browser must render it without making POST /api/analyze at all, so the
+// portfolio narrative remains available while the entire backend is down.
 //
-// Full stack exercised: Chromium → Vite proxy → web-service cache chain →
-// local-cache job synthesis → response normaliser → React report render.
+// Full path exercised: bundled cache → response normaliser → React report.
 
 import { test, expect } from "@playwright/test";
 import { startSearch, expectAnalysing, expectReport } from "./helpers.js";
 
 test("cached company renders a full report without live analysis", async ({ page }) => {
+  let analyzeRequests = 0;
+  await page.route("**/api/analyze", (route) => {
+    analyzeRequests += 1;
+    return route.abort("connectionrefused");
+  });
+
   await startSearch(page, "Shell");
   await expectAnalysing(page, "Shell");
 
@@ -24,4 +28,5 @@ test("cached company renders a full report without live analysis", async ({ page
   await expect(page.getByText("§ 2 · DIMENSIONAL SCORING")).toBeVisible();
   await expect(page.getByText("§ 4 · EVIDENCE TRAIL")).toBeVisible();
   await expect(page.getByRole("button", { name: "Open full trail →" })).toBeVisible();
+  expect(analyzeRequests).toBe(0);
 });

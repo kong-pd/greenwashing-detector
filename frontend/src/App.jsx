@@ -86,8 +86,9 @@ function applyPalette(name) {
   Object.entries(p).forEach(([k, v]) => root.style.setProperty(k, v));
 }
 
-// ── US-03: Demo companies pre-cached in local_cache.json ─────────────────────
-// These get real data from the backend; any input is acceptable too.
+// ── US-03: Demo companies pre-cached in the frontend bundle ──────────────────
+// AnalysisScreen serves these five without requiring the backend. Any other
+// company goes through the live API pipeline.
 
 // Build a minimal "live analysis" claim template for external company searches.
 // AnalysisScreen fetches real data and overwrites every field.

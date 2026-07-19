@@ -6,10 +6,14 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { GWD_DATA, MODEL_CHAIN_LABEL, RUBRIC_VERSION } from "../data.js";
+import { getPreCachedReport } from "../preCachedReports.js";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 const POLL_INTERVAL_MS = 3000;
 const API_TIMEOUT_MS   = 60000;
+// Completed results often arrive with the full event batch on the last poll.
+// Keep that truthful log readable long enough to render before handing off.
+const RESULT_HANDOFF_DELAY_MS = 1500;
 
 // ─── API helpers ───────────────────────────────────────────────────────────
 async function startAnalysis(query, manualContent, signal) {
@@ -345,7 +349,7 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
       // demo-data report.
       if (apiResult !== null) {
         finished.current = true;
-        const t = setTimeout(() => onComplete?.(apiResult), 700);
+        const t = setTimeout(() => onComplete?.(apiResult), RESULT_HANDOFF_DELAY_MS);
         return () => clearTimeout(t);
       }
       return;
@@ -389,6 +393,24 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
     setTimedOut(false);
     setScrapingFailReason(null);
 
+    // US-03: the five named portfolio fixtures are a frontend-owned demo
+    // fast path. They must remain available even when the entire web service
+    // is down. Manual content deliberately bypasses this path because a
+    // precomputed company report cannot answer the user's submitted text.
+    const preCached = manualContent == null
+      ? getPreCachedReport(query ?? claim?.headline ?? "")
+      : null;
+    if (preCached) {
+      const merged = normalise(preCached, claim);
+      setEvents(preCached.events);
+      setApiResult(merged);
+      if (pipelineDone.current && !finished.current) {
+        finished.current = true;
+        setTimeout(() => onComplete?.(merged), RESULT_HANDOFF_DELAY_MS);
+      }
+      return () => ac.abort();
+    }
+
     const deadline = Date.now() + API_TIMEOUT_MS;
 
     async function run() {
@@ -405,7 +427,7 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
           setApiResult(merged);
           if (pipelineDone.current && !finished.current) {
             finished.current = true;
-            setTimeout(() => onComplete?.(merged), 700);
+            setTimeout(() => onComplete?.(merged), RESULT_HANDOFF_DELAY_MS);
           }
           return;
         }
@@ -425,7 +447,7 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
             setApiResult(merged);
             if (pipelineDone.current && !finished.current) {
               finished.current = true;
-              setTimeout(() => onComplete?.(merged), 700);
+              setTimeout(() => onComplete?.(merged), RESULT_HANDOFF_DELAY_MS);
             }
             return;
           }
@@ -474,7 +496,17 @@ export function AnalysisScreen({ claim, query, onComplete, onBack }) {
     return () => ac.abort();
   }, [query, claim, retryCount, manualContent]);
 
-  useEffect(() => { return runFetch(); }, [runFetch]);
+  // Defer one tick so React StrictMode's development-only setup/cleanup probe
+  // can cancel the first setup before it dispatches a real analysis job.
+  // Without this guard one click creates two backend jobs in dev/E2E.
+  useEffect(() => {
+    let cleanup;
+    const timer = setTimeout(() => { cleanup = runFetch(); }, 0);
+    return () => {
+      clearTimeout(timer);
+      cleanup?.();
+    };
+  }, [runFetch]);
 
   // FR-04: User submitted manual content → restart analysis
   function handleManualSubmit(content) {
