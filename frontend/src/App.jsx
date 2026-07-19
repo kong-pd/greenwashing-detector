@@ -18,6 +18,7 @@ import { ReportScreen, EvidenceDrawer } from "./screens/ReportScreen.jsx";
 import { CompareScreen, toggleSelection } from "./screens/CompareScreen.jsx";
 import { fetchHistory } from "./api/client.js";
 import { useOpenReport, recentCards } from "./hooks/useOpenReport.js";
+import { loadLocalHistory, saveLocalReport, mergeHistoryRows } from "./localHistory.js";
 import {
   loadWatchlist, saveWatchlist, toggleWatch, isWatched, watchSnapshot, watchDelta,
 } from "./watchlist.js";
@@ -157,15 +158,18 @@ function LandingScreen({ onAnalyze, onMethodology, onOpenReport }) {
   const inputRef = React.useRef(null);
   const tab = TABS.find(t => t.id === activeTab);
 
-  // PROD-1 L1: recent analyses from the merged /api/history (DB + NFR-09
-  // relay). The strip is strictly optional decoration on the landing page —
-  // a dead backend means no strip, never a blocked or noisy landing.
-  const [recent, setRecent] = useState([]);
+  // Recent analyses merge backend history with browser-owned snapshots. A
+  // sleeping backend therefore cannot erase reports completed in this browser.
+  const [recent, setRecent] = useState(() => recentCards(loadLocalHistory()));
   useEffect(() => {
     let alive = true;
+    const local = loadLocalHistory();
     fetchHistory()
-      .then(d => { if (alive) setRecent(recentCards(d.results)); })
-      .catch(() => {});
+      .then(d => {
+        if (!Array.isArray(d?.results)) throw new Error("Invalid history response");
+        if (alive) setRecent(recentCards(mergeHistoryRows(d.results, local)));
+      })
+      .catch(() => { if (alive) setRecent(recentCards(local)); });
     return () => { alive = false; };
   }, []);
   const { openingId, openReport } = useOpenReport(
@@ -434,6 +438,12 @@ function LandingScreen({ onAnalyze, onMethodology, onOpenReport }) {
                             this session
                           </em>
                         )}
+                        {r.source === "local" && (
+                          <em className="lv2-recent-session"
+                            title="Saved only in this browser">
+                            this browser
+                          </em>
+                        )}
                       </span>
                     </button>
                   );
@@ -485,8 +495,8 @@ function BrandMark() {
 }
 
 // ─────────────────────────────────────────────── Reports screen
-// FR-29: ReportsScreen now calls GET /api/history for real data.
-// Falls back to empty state (not Petrovera demo data) if API is unavailable.
+// Server history remains authoritative when reachable; the bounded browser
+// snapshot preserves backendless pre-cached reports and is labelled honestly.
 function ReportsScreen({ onOpenReport, onCompare, watchlist = [], onToggleWatch, onReanalyse }) {
   const [reports,  setReports]  = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -496,26 +506,25 @@ function ReportsScreen({ onOpenReport, onCompare, watchlist = [], onToggleWatch,
   const [compareSel, setCompareSel] = useState([]);
 
   useEffect(() => {
-    async function fetchHistory() {
+    async function loadHistory() {
+      const local = loadLocalHistory();
       try {
-        const res  = await fetch("/api/history");
-        const data = await res.json();
-        setReports(data.results || []);
+        const data = await fetchHistory();
+        if (!Array.isArray(data?.results)) throw new Error("Invalid history response");
+        setReports(mergeHistoryRows(data.results, local));
       } catch (e) {
         console.warn("History API unavailable:", e);
         setApiError(true);
-        setReports([]);
+        setReports(local);
       } finally {
         setLoading(false);
       }
     }
-    fetchHistory();
+    loadHistory();
   }, []);
 
-  // C-2: a history row is a 5-field summary, not a report. Opening one goes
-  // through the shared useOpenReport hook — the SAME path the landing strip
-  // uses — which fetches the full record via GET /api/report/{job_id}
-  // (DB first, NFR-09 relay fallback) and only navigates on success.
+  // The landing strip and Reports list share one resolver: server summaries
+  // fetch their full record, while browser rows open their local snapshot.
   const { openingId, openReport } = useOpenReport(
     (full, name) => onOpenReport(full, name, "reports"),
     makeLiveClaim,
@@ -531,7 +540,9 @@ function ReportsScreen({ onOpenReport, onCompare, watchlist = [], onToggleWatch,
             {loading
               ? "Loading…"
               : apiError
-              ? "API unavailable · showing empty history"
+              ? reports.length
+                ? `${reports.length} completed ${reports.length === 1 ? "analysis" : "analyses"} · backend unavailable; showing this browser`
+                : "Backend unavailable · no reports saved in this browser"
               : `${reports.length} completed ${reports.length === 1 ? "analysis" : "analyses"}`}
           </p>
         </div>
@@ -631,10 +642,17 @@ function ReportsScreen({ onOpenReport, onCompare, watchlist = [], onToggleWatch,
                         this session
                       </em>
                     )}
+                    {r.source === "local" && (
+                      <em className="rpts-session" title="Saved only in this browser">
+                        this browser
+                      </em>
+                    )}
                   </div>
                   <div className="rpts-title">{r.company_name}</div>
                   <div className="rpts-src mono small mute">
-                    GreenCheck live analysis · AI Analysis
+                    {r.source === "local"
+                      ? "GreenCheck report · saved locally"
+                      : "GreenCheck live analysis · AI Analysis"}
                   </div>
                 </div>
                 <div className="rpts-r">
@@ -716,6 +734,11 @@ export default function App() {
   // breadcrumb root and the ← button are honest about the way back.
   const goReport  = (claim, query, origin = "search") =>
     setRoute({ name: "report", claim, query, origin });
+  const completeAnalysis = (result, fallback, query) => {
+    const report = result ?? fallback;
+    saveLocalReport(report);
+    goReport(report, query, "search");
+  };
 
   const tweaksPanel = (
     <TweaksPanel>
@@ -768,7 +791,7 @@ export default function App() {
             <AnalysisScreen
               claim={route.claim}
               query={route.query}
-              onComplete={result => goReport(result ?? route.claim, route.query, "search")}
+              onComplete={result => completeAnalysis(result, route.claim, route.query)}
               onBack={goSearch}
             />
           )}

@@ -1,12 +1,28 @@
 // useOpenReport — the C-2-hardened "open a history row" path, extracted so
 // the Reports list and the landing Recent-analyses strip (PROD-1 L1) share
-// ONE implementation: a row is a thin 5-field summary, never a report;
-// opening it fetches the full record through GET /api/report/{job_id}
-// (DB first, NFR-09 relay fallback) and only navigates on success.
+// ONE implementation. Backend rows fetch their full record through
+// GET /api/report/{job_id}; browser rows carry a bounded full snapshot so a
+// pre-cached report remains openable while the backend is unavailable.
 import { useState } from "react";
 import { gwdToast } from "../toast.js";
 import { normalise } from "../screens/AnalysisScreen.jsx";
 import { getReport } from "../api/client.js";
+
+export async function loadHistoryReport(row, makeClaim, fetchFull = getReport) {
+  const claim = makeClaim(row?.company_name || "Unknown");
+  const snapshot = () => normalise(row?.report, claim);
+
+  if (row?.source === "local") return snapshot();
+
+  try {
+    const full = normalise(await fetchFull(row.job_id), claim);
+    return full || snapshot();
+  } catch (error) {
+    const fallback = snapshot();
+    if (fallback) return fallback;
+    throw error;
+  }
+}
 
 /**
  * @param onOpen    (fullReport, companyName) => void — navigate on success
@@ -19,8 +35,7 @@ export function useOpenReport(onOpen, makeClaim) {
     if (openingId) return;
     setOpeningId(row.job_id);
     try {
-      const raw  = await getReport(row.job_id);
-      const full = normalise(raw, makeClaim(row.company_name || "Unknown"));
+      const full = await loadHistoryReport(row, makeClaim);
       if (!full) {
         gwdToast("Report no longer available — it may have expired", { kind: "warn" });
         return;
@@ -42,13 +57,16 @@ export function useOpenReport(onOpen, makeClaim) {
  * boundary logic is a tested function, not JSX:
  *   * drop rows that couldn't open a report (no job_id) or render a name;
  *   * cap the strip (default 5), preserving the backend's newest-first order;
- *   * default `source` to "db" for pre-L1 payloads — only an explicit
- *     "relay" earns the session-scoped honesty tag.
+ *   * default `source` to "db" for legacy payloads while preserving explicit
+ *     relay and browser-local scope labels.
  */
 export function recentCards(rows, cap = 5) {
   if (!Array.isArray(rows)) return [];
   return rows
     .filter(r => r && r.job_id && r.company_name)
     .slice(0, cap)
-    .map(r => ({ ...r, source: r.source === "relay" ? "relay" : "db" }));
+    .map(r => ({
+      ...r,
+      source: r.source === "relay" || r.source === "local" ? r.source : "db",
+    }));
 }

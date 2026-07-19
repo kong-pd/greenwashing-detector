@@ -1,13 +1,11 @@
 // CompareScreen — two COMPLETED analyses side by side (PROD-1 L2).
 //
-// The rows arriving here are thin history summaries; this screen is a
-// C-2-disciplined consumer: it fetches BOTH full records through the real
-// GET /api/report/{job_id} (DB first, NFR-09 relay fallback) and renders
-// nothing it didn't receive. Either fetch failing → one honest error state,
-// never a half-populated comparison.
+// This C-2-disciplined consumer resolves BOTH full records through the shared
+// loader (backend record or browser snapshot) and renders nothing it did not
+// receive. Either side failing means one honest error state, never a
+// half-populated comparison.
 import React, { useState, useEffect } from "react";
-import { getReport } from "../api/client.js";
-import { normalise } from "./AnalysisScreen.jsx";
+import { loadHistoryReport } from "../hooks/useOpenReport.js";
 import { DIMENSION_META, RiskPill, RegChips } from "../components/SharedComponents.jsx";
 
 // ── Pure seams (vitest-covered) ──────────────────────────────────────────────
@@ -83,8 +81,8 @@ export function CompareScreen({ rows, makeClaim, onBack }) {
     let alive = true;
     Promise.all(
       rows.map(async r => {
-        const raw = await getReport(r.job_id);
-        return { row: r, rep: normalise(raw, makeClaim(r.company_name || "Unknown")) };
+        const rep = await loadHistoryReport(r, makeClaim);
+        return { row: r, rep };
       })
     )
       .then(pairs => {
