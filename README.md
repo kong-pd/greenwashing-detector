@@ -12,6 +12,7 @@ Built as a general-purpose compliance scoring engine; ESG is the current config.
 
 **Demo:** <https://greenwashing-detector.vercel.app>
 *Backend is currently offline. The five pre-cached companies (Shell, H&M, BP, Tesla, Patagonia) load entirely from the frontend and show the full report flow. For live analysis of other companies, clone the repo and run locally with your own API keys.*
+
 ![Loading page](docs/Screenshots/loading_page.png)
 ![Report overview](docs/Screenshots/ReportPage1.png)
 ![Evidence drawer](docs/Screenshots/ReportPage7.png)
