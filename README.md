@@ -258,10 +258,6 @@ database/
 
 ---
 
-## Contributing
-
-`CONTRIBUTING.md`
-
 ## License
 
 MIT
