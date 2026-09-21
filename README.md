@@ -7,11 +7,10 @@
 [![Railway](https://img.shields.io/badge/Railway-deployed-6B00FF?logo=railway)]()
 [![License](https://img.shields.io/badge/License-MIT-green)]()
 
-Corporate greenwashing is under increasing regulatory scrutiny. GreenCheck automates ESG claim verification — scrapes sustainability pages, cross-references against regulatory databases, and scores against five international standards including EU Green Claims Directive 2024.
-Built as a general-purpose compliance scoring engine; ESG is the current config.
+This is a greenwashing detector. You give it a company name, it scrapes their sustainability pages, pulls news coverage, and scores what it finds against five international standards (TCFD, GRI 305, EU Taxonomy Art. 8, GRI 2-27, EU Green Claims Directive 2024). The output is a report that tells you with evidence, how much of what a company says about the environment actually holds up. The scoring engine itself is domain-agnostic, greenwashing is just the current config, more on that below.
 
-**Demo:** <https://greenwashing-detector.vercel.app>
-*Backend is currently offline. The five pre-cached companies (Shell, H&M, BP, Tesla, Patagonia) load entirely from the frontend and show the full report flow. For live analysis of other companies, clone the repo and run locally with your own API keys.*
+**Demo:** https://greenwashing-detector.vercel.app
+*(backend is currently offline because of Railway free tier suspended, you may clone the repo and run locally with your own API keys for live analysis of other companies. However, we have pre-cached five companies in landing page that can work without the backend at all.)*
 
 ![Loading page](docs/Screenshots/loading_page.png)
 ![Report overview](docs/Screenshots/ReportPage1.png)
